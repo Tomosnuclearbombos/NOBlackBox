@@ -86,7 +86,7 @@ namespace NOBlackBox
             this.enabled = false;
             base.enabled = false;
             props.Clear();
-            GameObject.Destroy(this);
+            GameObject.Destroy(gameObject);   // 2026-10-09: the whole object, so unitObjects/waves can drop it
         }
     }
 }

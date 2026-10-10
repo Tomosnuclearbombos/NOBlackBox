@@ -66,14 +66,14 @@ namespace NOBlackBox
                         Recorder_mono.Current!.invokeWriterRemove(this);
                         this.enabled = false;
                         Plugin.Logger?.LogDebug($"DISABLING UNIT {unitId.ToString(CultureInfo.InvariantCulture)}");
-                        GameObject.Destroy(this);
+                        GameObject.Destroy(gameObject);   // 2026-10-09: the whole object, so unitObjects/waves can drop it
                     }
                     //this is to stagger the Destroyed Event and the Remove call to 2 different time steps, as having them both on the same time step will confuse Tacview
                     purge = true;
                 }
             } catch
             {
-                GameObject.Destroy(this);
+                GameObject.Destroy(gameObject);   // 2026-10-09: the whole object, so unitObjects/waves can drop it
             }
         }
 
