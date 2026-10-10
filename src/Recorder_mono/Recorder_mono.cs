@@ -256,7 +256,8 @@ namespace NOBlackBox
 
                     foreach (var bullet in bullets)
                     {
-                        AddTracer(bulletSim, bullet, null);
+                        if (bullet != null && bullet.active)     // 2026-10-09: a finished round is not recorded again
+                            AddTracer(bulletSim, bullet, null);
                     }
                 }
                 processBulletSims = false;
@@ -341,7 +342,13 @@ namespace NOBlackBox
                     try { tracer.LateTick(); } catch (Exception e) { Debug.LogException(e); }
                 }
             }
-            liveTracers.RemoveAll(t => !t.enabled);
+            // 2026-10-09: a finished round leaves the seen-rounds record too (it grew to 105k rounds in one mission)
+            liveTracers.RemoveAll(t =>
+            {
+                if (t.enabled) return false;
+                if (t.bullet != null) tracers.Remove(t.bullet);
+                return true;
+            });
         }
         void OnDisable()
         {
@@ -366,14 +373,15 @@ namespace NOBlackBox
 
         private bool UnitDiscovery()
         {
-            foreach (int key in unitObjects.Keys)
+            // 2026-10-09: collect first, remove after (removing inside the loop threw after the first removal on Mono)
+            List<long> deadUnits = null;
+            foreach (KeyValuePair<long, GameObject> kv in unitObjects)
             {
-                if (null == unitObjects[key])
-                {
-                    // Plugin.Logger?.LogDebug($"REMOVING OBJECT {key.ToString(CultureInfo.InvariantCulture)}");
-                    unitObjects.Remove(key);
-                }
+                if (null == kv.Value)
+                    (deadUnits ??= new List<long>()).Add(kv.Key);
             }
+            if (deadUnits != null)
+                foreach (long key in deadUnits) unitObjects.Remove(key);
             //Plugin.Logger?.LogDebug($"Frame TICK at {curTime.ToString(CultureInfo.InvariantCulture)}");
             units = UnityEngine.Object.FindObjectsByType<Unit>(FindObjectsSortMode.None);
             //Plugin.Logger?.LogDebug($"DISCOVERED {units.Length.ToString(CultureInfo.InvariantCulture)} UNITS!");
@@ -392,14 +400,14 @@ namespace NOBlackBox
 
         public bool ShockWaveDiscovery()
         {
-            foreach (Shockwave key in waves.Keys)
+            List<Shockwave> deadWaves = null;
+            foreach (KeyValuePair<Shockwave, GameObject> kv in waves)
             {
-                if (null == waves[key])
-                {
-                    //Plugin.Logger?.LogDebug($"REMOVING TRACER");
-                    waves.Remove(key);
-                }
+                if (null == kv.Value)
+                    (deadWaves ??= new List<Shockwave>()).Add(kv.Key);
             }
+            if (deadWaves != null)
+                foreach (Shockwave key in deadWaves) waves.Remove(key);
             shockwaves = UnityEngine.Object.FindObjectsByType<Shockwave>(FindObjectsSortMode.None);
             //Plugin.Logger?.LogDebug($"DISCOVERED {shockwaves.Length.ToString(CultureInfo.InvariantCulture)} SHOCKWAVES!");
             shockwaveDiscoveryTimer = 0f;
