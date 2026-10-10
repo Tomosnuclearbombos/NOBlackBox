@@ -16,7 +16,10 @@ namespace NOBlackBox
 
         private Vector3 lastPos = new(float.NaN, float.NaN, float.NaN);
 
-        public virtual void Init(BulletSim sim, BulletSim.Bullet bullet)
+        // A round gets two positions: where it was fired from and where it ended. Tacview draws the line between them,
+        // so there are no updates in flight. firedFrom comes from BulletFiredPatch; a round it missed starts where the
+        // bullet discovery found it.
+        public virtual void Init(BulletSim sim, BulletSim.Bullet bullet, GlobalPosition? firedFrom = null)
         {
             this.sim = sim;
             this.bullet = bullet;
@@ -26,28 +29,21 @@ namespace NOBlackBox
             {
                 { "Type", "Misc+Projectile+Shell" }
             };
+            UpdatePose(firedFrom ?? bullet.position);
 
             Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
             props = [];
-        }
-
-        public override void Update()
-        {
-            timer += Time.deltaTime;
-            if (timer < Configuration.tracerUpdateDelta.Value)
-            {
-                return;
-            }
-            UpdatePose();
-            Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
-            props = [];
-            timer = 0f;
         }
 
         public virtual void LateUpdate()
         {
-            if (bullet.tracer == null || !bullet.tracer.gameObject.activeSelf)
+            // Bullet.tracer is only the visual and is always null on a dedicated server (AddBullet skips it when headless).
+            // The game sets active = false when the round hits something or self destructs, with position where it ended.
+            if (sim == null || !bullet.active)
             {
+                UpdatePose(bullet.position);
+                Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
+                props = [];
                 this.enabled = false;
                 base.enabled = false;
                 Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterRemove(this);
@@ -57,12 +53,12 @@ namespace NOBlackBox
             }
         }
 
-        public void UpdatePose()
+        public void UpdatePose(GlobalPosition position)
         {
 
-            float fx = MathF.Round(bullet.position.x, 2);
-            float fy = MathF.Round(bullet.position.y, 2);
-            float fz = MathF.Round(bullet.position.z, 2);
+            float fx = MathF.Round(position.x, 2);
+            float fy = MathF.Round(position.y, 2);
+            float fz = MathF.Round(position.z, 2);
 
             Vector3 newPos = new(fx, fy, fz);
 

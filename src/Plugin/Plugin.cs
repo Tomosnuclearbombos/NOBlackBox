@@ -5,6 +5,7 @@ using System.Linq;
 using BepInEx;
 using BepInEx.Bootstrap;
 using BepInEx.Logging;
+using HarmonyLib;
 using NuclearOption.Networking;
 using UnityEngine;
 
@@ -85,6 +86,16 @@ namespace NOBlackBox
 
             OnGameStateChange += ResetRecordingManually;
             GameManager.OnGameStateChanged.AddListener(OnGameStateChange);
+
+            try
+            {
+                new Harmony("xyz.KopterBuzz.NOBlackBox").CreateClassProcessor(typeof(BulletFiredPatch)).Patch();
+                Logger?.LogDebug("Gun round fire hook applied.");
+            }
+            catch (Exception e)
+            {
+                base.Logger.LogWarning($"Gun round fire hook not applied, rounds start where the bullet discovery finds them: {e.Message}");
+            }
 
         }
         private void Update()

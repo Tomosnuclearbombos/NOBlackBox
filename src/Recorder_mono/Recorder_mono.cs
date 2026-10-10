@@ -55,6 +55,20 @@ namespace NOBlackBox
             writer.WriteRepairedEvent(obj, curTime);
         }
 
+        // one ACMITracer_mono per gun round, from the bullet discovery or from BulletFiredPatch at the moment it is fired
+        internal void AddTracer(BulletSim sim, BulletSim.Bullet bullet, GlobalPosition? firedFrom)
+        {
+            if (tracers.ContainsKey(bullet))
+            {
+                return;
+            }
+            GameObject tracer = new GameObject();
+            tracer.AddComponent<ACMITracer_mono>();
+            tracer.GetComponent<ACMITracer_mono>().Init(sim, bullet, firedFrom);
+            tracer.GetComponent<ACMITracer_mono>().enabled = true;
+            tracers.Add(bullet, tracer);
+        }
+
         void Awake()
         {
             Plugin.Logger?.LogDebug("USING MONO RECORDER");
@@ -203,15 +217,7 @@ namespace NOBlackBox
 
                     foreach (var bullet in bullets)
                     {
-
-                        if (!tracers.ContainsKey(bullet))
-                        {
-                            GameObject tracer = new GameObject();
-                            tracer.AddComponent<ACMITracer_mono>();
-                            tracer.GetComponent<ACMITracer_mono>().Init(bulletSim, bullet);
-                            tracer.GetComponent<ACMITracer_mono>().enabled = true;
-                            tracers.Add(tracer.GetComponent<ACMITracer_mono>().bullet, tracer);
-                        }
+                        AddTracer(bulletSim, bullet, null);
                     }
                 }
                 processBulletSims = false;
