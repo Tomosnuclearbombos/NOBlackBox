@@ -2,6 +2,9 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Reflection;
+using System.Text.RegularExpressions;
+using NuclearOption.Networking;
 using UnityEngine;
 
 namespace NOBlackBox
@@ -42,6 +45,18 @@ namespace NOBlackBox
         Aircraft aircraft;
         Aircraft localAircraft = null;
 
+        // Tomo's Nukes pilot-name fix (2026-10-04). Since game 0.34 GetPlayerName() returns a PlayerName object, so the
+        // callsign was written as "(NuclearOption.Networking.PlayerName)". A dedicated server often cannot resolve a Steam
+        // persona straight away either: the game then hands back "Player" or "ID: <steam64>". Recordings are published,
+        // so a Steam ID is never written; until a real name resolves the callsign says "(Pilot)" and the name is checked
+        // again every 5 s.
+        private string pilotName = "";
+        private float nextNameCheck = 0f;
+        private static MethodInfo? nukeStatsRawName;
+        private static bool nukeStatsLooked = false;
+        private static readonly Regex steamIdRe = new Regex(@"7656119\d{10}");
+        private static readonly Regex placeholderRe = new Regex(@"^Pilot( \d{4})?$");
+
         public virtual void Init(Aircraft aircraft)
         {
             GameManager.GetLocalAircraft(out localAircraft);
@@ -69,8 +84,13 @@ namespace NOBlackBox
             };
             if (aircraft.Player != null)
             {
-                //props.Add("Pilot", aircraft.Player.PlayerName);
-                props["CallSign"] = $"{aircraft.definition.code} ({aircraft.Player.GetPlayerName()}) {tacviewId:X}";
+                pilotName = PilotNameOf(aircraft.Player);
+                nextNameCheck = Time.time + 5f;
+                props["CallSign"] = CallSignFor(pilotName);
+                if (pilotName != "")
+                {
+                    props["Pilot"] = pilotName.Replace(",", "\\,");
+                }
                 if (Configuration.RecordSteamID.Value == true)
                 {
                     props.Add("Registration", aircraft.Player.SteamID.ToString());
@@ -94,6 +114,17 @@ namespace NOBlackBox
             if (timer < Configuration.aircraftUpdateDelta.Value)
             {
                 return;
+            }
+            if (aircraft.Player != null && pilotName == "" && Time.time >= nextNameCheck)
+            {
+                nextNameCheck = Time.time + 5f;
+                string name = PilotNameOf(aircraft.Player);
+                if (name != "")
+                {
+                    pilotName = name;
+                    props["CallSign"] = CallSignFor(pilotName);
+                    props["Pilot"] = pilotName.Replace(",", "\\,");
+                }
             }
             UpdatePose();
             UpdateAircraft();
@@ -255,6 +286,49 @@ namespace NOBlackBox
                     lastThrust = avgThrust;
                 }
             }
+        }
+
+        private string CallSignFor(string name)
+        {
+            return $"{aircraft.definition.code} ({(name == "" ? "Pilot" : name.Replace(",", "\\,"))}) {tacviewId:X}";
+        }
+
+        // The name the rest of the server shows: NukeStats' resolver first (Steam, then its own last-known names), then the
+        // game's resolved name, then the name the client reported when it joined. "" = nothing real yet.
+        private static string PilotNameOf(Player player)
+        {
+            try
+            {
+                if (!nukeStatsLooked)
+                {
+                    nukeStatsLooked = true;
+                    Type? t = AppDomain.CurrentDomain.GetAssemblies()
+                        .Select(a => a.GetType("NukeStats.NukeStatsPlugin", false)).FirstOrDefault(x => x != null);
+                    nukeStatsRawName = t?.GetMethod("RawNameOf", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
+                }
+                if (nukeStatsRawName != null && IsRealName(nukeStatsRawName.Invoke(null, new object[] { player }) as string, out string fromStats))
+                {
+                    return fromStats;
+                }
+                PlayerName pn = player.GetPlayerName();
+                if (pn != null && IsRealName(pn.SanitizedName, out string fromGame))
+                {
+                    return fromGame;
+                }
+                if (pn != null && IsRealName(pn.ClientReportedSteamName?.SanitizeRichText(32), out string reported))
+                {
+                    return reported;
+                }
+            }
+            catch (Exception) { }
+            return "";
+        }
+
+        private static bool IsRealName(string? n, out string name)
+        {
+            name = (n ?? "").Trim();
+            return name != "" && name != "?" && name != "Player" && !name.StartsWith("ID: ", StringComparison.Ordinal)
+                && !placeholderRe.IsMatch(name) && !steamIdRe.IsMatch(name) && !Regex.IsMatch(name, @"^\d+$");
         }
     }
 }
