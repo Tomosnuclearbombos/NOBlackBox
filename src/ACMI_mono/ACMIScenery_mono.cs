@@ -27,8 +27,8 @@ namespace NOBlackBox.src.ACMI_mono
             };
             UpdatePose();
             UpdateState();
-            Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
-            props = [];
+            Recorder_mono.Current!.invokeWriterUpdate(this);
+            props.Clear();
             this.enabled = true;
             base.enabled = true;
         }

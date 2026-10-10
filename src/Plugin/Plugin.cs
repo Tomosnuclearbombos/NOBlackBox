@@ -90,6 +90,7 @@ namespace NOBlackBox
             try
             {
                 new Harmony("xyz.KopterBuzz.NOBlackBox").CreateClassProcessor(typeof(BulletFiredPatch)).Patch();
+                BulletFiredPatch.applied = true;
                 Logger?.LogDebug("Gun round fire hook applied.");
             }
             catch (Exception e)
@@ -190,13 +191,9 @@ namespace NOBlackBox
             GameObject.Destroy(autoSaveCountDown);
             GameObject.Destroy(recorderMono);
             //GameObject.Destroy(recordingIndicator);
+            // gun rounds and flares are plain objects now and go with the recorder
             ACMIObject_mono[] found = GameObject.FindObjectsByType<ACMIObject_mono>(FindObjectsSortMode.None);
-            ACMIFlare_mono[] foundFlares = GameObject.FindObjectsByType<ACMIFlare_mono>(FindObjectsSortMode.None);
             foreach (ACMIObject_mono obj in found)
-            {
-                GameObject.Destroy(obj);
-            }
-            foreach (ACMIFlare_mono obj in foundFlares)
             {
                 GameObject.Destroy(obj);
             }

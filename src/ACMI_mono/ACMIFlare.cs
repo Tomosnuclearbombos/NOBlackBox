@@ -8,35 +8,59 @@ using static BulletSim;
 
 namespace NOBlackBox
 {
-    internal class ACMIFlare_mono : ACMIObject_mono
+    // One flare. Tomo's Nukes performance build (2026-10-06): a plain object ticked by Recorder_mono instead of a new
+    // GameObject plus component per flare. Same lines, same frames: Tick runs where Unity called Update and LateTick where
+    // it called LateUpdate, with Unity's rules for a component added part way through a frame and for Destroy.
+    internal class ACMIFlare : IACMIObject
     {
         private static int FLAREID = 0;
+
+        public long unitId;
+        public long tacviewId;
+        internal float timer = 0f;
+        internal bool enabled = true;
+        public Dictionary<string, string> props = [];
+
+        // Unity gave a component added during the physics step its first Update in that same frame, and one added
+        // during the Update pass its first Update in the next frame. A destroyed component got no calls from the next
+        // frame on.
+        internal readonly int createdFrame = Time.frameCount;
+        internal readonly bool createdInPhysics = Time.inFixedTimeStep;
+        internal int destroyedFrame = int.MaxValue;
 
         private Vector3 lastPos = new(float.NaN, float.NaN, float.NaN);
 
         public IRFlare flare;
 
+        long IACMIObject.TacviewId => tacviewId;
+        Dictionary<string, string> IACMIObject.Props => props;
+        bool IACMIObject.DestroyedEvent => false;
+
+        internal bool Gone => destroyedFrame < Time.frameCount;
+
+        internal bool TicksThisFrame => createdFrame < Time.frameCount || createdInPhysics;
+
         public virtual void Init(IRSource source)
         {
             this.flare = source.transform.gameObject.GetComponent<IRFlare>();
-            base.unitId = (long)(Interlocked.Increment(ref FLAREID) - 1) | (1L << 32);
-            base.tacviewId = base.unitId;
+            unitId = (long)(Interlocked.Increment(ref FLAREID) - 1) | (1L << 32);
+            tacviewId = unitId;
             props = new Dictionary<string, string>()
             {
                 {"Type","Misc+Decoy+Flare" }
             };
             try
             {
-                Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
+                Recorder_mono.Current!.invokeWriterUpdate(this);
             } catch
             {
-                Destroy(this);
+                Destroy();
             }
-            
-            props = [];
+
+            props.Clear();
         }
 
-        public override void Update()
+        public virtual void Tick()
         {
             timer += Time.deltaTime;
             if (timer < Configuration.flareUpdateDelta.Value)
@@ -44,12 +68,12 @@ namespace NOBlackBox
                 return;
             }
             UpdatePose();
-            Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
-            props = [];
+            Recorder_mono.Current!.invokeWriterUpdate(this);
+            props.Clear();
             timer = 0;
         }
 
-        public virtual void LateUpdate()
+        public virtual void LateTick()
         {
             if  (flare == null || !flare.enabled || null == flare.transform.position)
             {
@@ -93,12 +117,19 @@ namespace NOBlackBox
 
         private void DisableFlare()
         {
-            this.enabled = false;
-            base.enabled = false;
-            Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterRemove(this);
+            enabled = false;
+            Recorder_mono.Current!.invokeWriterRemove(this);
             Plugin.Logger?.LogDebug($"DISABLING FLARE {unitId.ToString(CultureInfo.InvariantCulture)}");
-            props = [];
-            GameObject.Destroy(this);
+            props.Clear();
+            Destroy();
+        }
+
+        private void Destroy()
+        {
+            if (destroyedFrame == int.MaxValue)
+            {
+                destroyedFrame = Time.frameCount;
+            }
         }
     }
 }

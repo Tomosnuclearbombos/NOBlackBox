@@ -31,13 +31,13 @@ namespace NOBlackBox
             };
             UpdatePose();
             UpdateState();
-            Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
-            props = [];
+            Recorder_mono.Current!.invokeWriterUpdate(this);
+            props.Clear();
             this.enabled = true;
             base.enabled = true;
         }
 
-        public override void Update()
+        public override void Tick()
         {
             timer += Time.deltaTime;
             if (timer < Configuration.buildingUpdateDelta.Value)
@@ -65,33 +65,33 @@ namespace NOBlackBox
 
                 props.Add("Color", color);
                 props.Add("Debug", $"{building.unitState.ToString()}");
-                Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
+                Recorder_mono.Current!.invokeWriterUpdate(this);
 
             }
             if (unit.disabled && !base.disabled)
             {
-                props = [];
+                props.Clear();
                 props.Add("Visible", "0.0");
                 props.Add("Type", null);
-                Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
-                Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterDestroy(this);
-                props = [];
+                Recorder_mono.Current!.invokeWriterUpdate(this);
+                Recorder_mono.Current!.invokeWriterDestroy(this);
+                props.Clear();
                 base.disabled = true;
             }
             if (!unit.disabled && base.disabled)
             {
                 this.Init(this.building);
                 props.Add("Visible", "1.0");
-                Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
-                props = [];
-                Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterRepair(this);
+                Recorder_mono.Current!.invokeWriterUpdate(this);
+                props.Clear();
+                Recorder_mono.Current!.invokeWriterRepair(this);
                 base.disabled = false;
             }
-            props = [];
+            props.Clear();
             timer = 0;
         }
 
-        public override void LateUpdate()
+        public override void LateTick()
         {
             
         }

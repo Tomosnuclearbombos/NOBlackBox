@@ -10,19 +10,21 @@ namespace NOBlackBox
     [HarmonyPatch(typeof(BulletSim), nameof(BulletSim.AddBullet))]
     internal static class BulletFiredPatch
     {
-        private static bool failed = false;
+        // applied: Plugin.Awake patched AddBullet. failed: the hook has thrown at least once, so a round may have been
+        // missed and the bullet discovery goes back to its configured rate.
+        internal static bool applied = false;
+        internal static bool failed = false;
 
         private static void Postfix(BulletSim __instance, Transform muzzle, List<BulletSim.Bullet> ___bullets)
         {
             // this runs inside the game's gun code: a recorder problem must never stop a gun firing
             try
             {
-                GameObject? recorderObject = Plugin.recorderMono;
-                if (recorderObject == null || ___bullets.Count == 0)
+                if (___bullets.Count == 0)
                 {
                     return;
                 }
-                Recorder_mono recorder = recorderObject.GetComponent<Recorder_mono>();
+                Recorder_mono? recorder = Recorder_mono.Current;
                 if (recorder == null || !recorder.enabled)
                 {
                     return;

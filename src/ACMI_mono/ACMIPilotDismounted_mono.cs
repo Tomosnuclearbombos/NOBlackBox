@@ -26,13 +26,13 @@ namespace NOBlackBox
                 { "Type", "Ground+Light+Human+Air+Parachutist" },
                 { "Debug", lastState.ToString()}
             };
-            Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
-            props = [];
+            Recorder_mono.Current!.invokeWriterUpdate(this);
+            props.Clear();
             this.enabled = true;
             base.enabled = true;
         }
 
-        public override void Update()
+        public override void Tick()
         {
             if (!this.enabled || unit.disabled)
             {
@@ -48,14 +48,14 @@ namespace NOBlackBox
                 props.Add("Visible", "0.0");
                 props.Add("Type", null);
                 Plugin.Logger?.LogDebug($"PARACHUTE LANDED {unitId.ToString(CultureInfo.InvariantCulture)}");
-                Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
-                Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterRemove(this);
+                Recorder_mono.Current!.invokeWriterUpdate(this);
+                Recorder_mono.Current!.invokeWriterRemove(this);
                 GameObject.Destroy(this);
             }
             UpdatePose();
             UpdateState();
-            Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
-            props = [];
+            Recorder_mono.Current!.invokeWriterUpdate(this);
+            props.Clear();
             timer = 0;
         }
     }

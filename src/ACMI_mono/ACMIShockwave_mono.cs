@@ -45,11 +45,11 @@ namespace NOBlackBox
                 }" },
                 { "Type", "Misc+Explosion" }
             };
-            Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
-            props = [];
+            Recorder_mono.Current!.invokeWriterUpdate(this);
+            props.Clear();
         }
 
-        public override void Update()
+        public override void Tick()
         {
             try
             {
@@ -67,8 +67,8 @@ namespace NOBlackBox
                     DisableShockWave();
                 }
                 props.Add("Radius", radius.ToString("0.##", CultureInfo.InvariantCulture));
-                Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
-                props = [];
+                Recorder_mono.Current!.invokeWriterUpdate(this);
+                props.Clear();
                 timer = 0f;
                 lastRadius = radius;
                 Plugin.Logger?.LogDebug($"Shockwave {SHOCKWAVEID.ToString(CultureInfo.InvariantCulture)}Blast Radius: {blastRadius.ToString(CultureInfo.InvariantCulture)}, Current Radius: {radius.ToString(CultureInfo.InvariantCulture)}, Speed: {waveSpeed.ToString(CultureInfo.InvariantCulture)}");
@@ -81,11 +81,11 @@ namespace NOBlackBox
 
         private void DisableShockWave()
         {
-            Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterRemove(this);
+            Recorder_mono.Current!.invokeWriterRemove(this);
             Plugin.Logger?.LogDebug($"DISABLING SHOCKWAVE {unitId.ToString(CultureInfo.InvariantCulture)}");
             this.enabled = false;
             base.enabled = false;
-            props = [];
+            props.Clear();
             GameObject.Destroy(this);
         }
     }

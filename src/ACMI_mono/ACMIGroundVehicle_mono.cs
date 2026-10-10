@@ -124,12 +124,12 @@ namespace NOBlackBox
                 { "EngagementRange", winningRange.ToString(CultureInfo.InvariantCulture) },
                 { "Debug", lastState.ToString()}
             };
-            Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
-            props = [];
+            Recorder_mono.Current!.invokeWriterUpdate(this);
+            props.Clear();
             this.enabled = true;
             base.enabled = true;
         }
-        public override void Update()
+        public override void Tick()
         {
             if (!this.enabled || unit.disabled)
             {
@@ -143,62 +143,14 @@ namespace NOBlackBox
             UpdatePose();
             UpdateTargets();
             UpdateState();
-            Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
-            props = [];
+            Recorder_mono.Current!.invokeWriterUpdate(this);
+            props.Clear();
             timer = 0;
         }
-        internal override void UpdateTargets()
-        {
-            foreach (WeaponStation station in unit.weaponStations)
-            {
-                try
-                {
-                    targets.AddItem<Unit>(station.GetTurret().GetTarget());
-                }
-                catch
-                {
-                    //no target
-                }
-
-            }
-
-            if (targets.Any())
-            {
-                if (!lastTargets.Any())
-                {
-                    lastTargets = targets;
-                }
-                else
-                {
-                    if (lastTargets == targets)
-                    {
-                        return;
-                    }
-                }
-                lastTargets = targets;
-                int max = targets.Length;
-                if (max > 10)
-                {
-                    max = 10;
-                }
-                if (targets.Length > 1)
-                {
-
-                    for (int i = 0; i < max; i++)
-                    {
-                        if (i == 0)
-                        {
-                            lockedTargetString = "LockedTarget";
-                        }
-                        else
-                        {
-                            lockedTargetString = $"LockedTarget{i:X}";
-                        }
-                        props.Add(lockedTargetString, $"{GetTacviewIdOfUnit(targets[i].persistentID.Id):X}");
-                    }
-                }
-            }
-            targets = [];
-        }
+        // Tomo's Nukes performance build (2026-10-06): no UpdateTargets override. The upstream one called
+        // targets.AddItem(station.GetTurret().GetTarget()) for every weapon station and threw the result away (AddItem
+        // returns a new sequence), so targets stayed empty and nothing was ever written. A station without a turret
+        // also threw and caught a NullReferenceException every update. GetTurret and GetTarget only read fields, so
+        // dropping the loop writes exactly the same recording.
     }
 }

@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using NuclearOption.SavedMission;
 using NuclearOption.SceneLoading;
 using UnityEngine;
@@ -15,6 +17,12 @@ namespace NOBlackBox
         private readonly DateTime reference;
         public static TimeSpan lastUpdate;
         public static DateTime lastFlushTime;
+        // Tomo's Nukes performance build (2026-10-06): the autosave check ran DateTime.Now (a time zone conversion) for
+        // every line written. It now reads a monotonic clock; lastFlushTime is still kept for the countdown widget.
+        private static readonly Stopwatch flushClock = Stopwatch.StartNew();
+        private double lastFlushSeconds;
+        // one reused builder for the props of every line (the writer is only called from the main thread)
+        private readonly StringBuilder line = new StringBuilder(256);
         internal string filename;
         internal MapKey currentMapKey;
         internal ACMIWriter(DateTime reference)
@@ -66,6 +74,7 @@ namespace NOBlackBox
             output.Flush();
 
             lastFlushTime = DateTime.Now;
+            lastFlushSeconds = flushClock.Elapsed.TotalSeconds;
         }
 
         ~ACMIWriter()
@@ -73,9 +82,9 @@ namespace NOBlackBox
             Close();
         }
 
-        public void UpdateObject(ACMIObject_mono aObject, DateTime updateTime)
+        public void UpdateObject(IACMIObject aObject, DateTime updateTime)
         {
-            if (aObject.props.Count == 0)
+            if (aObject.Props.Count == 0)
                 return;
 
             TimeSpan diff = updateTime - reference;
@@ -87,11 +96,11 @@ namespace NOBlackBox
             }
 
             //output.WriteLine($"{aObject.id:X},{StringifyProps(props)}");
-            WriteLine($"{aObject.tacviewId:X},{StringifyProps(aObject.props)}");
+            WriteLine(StringifyProps(aObject.TacviewId, aObject.Props));
             //Plugin.Logger.LogDebug($"Time Elapsed = {diff.TotalSeconds}");
         }
 
-        internal void RemoveObject(ACMIObject_mono aObject, DateTime updateTime)
+        internal void RemoveObject(IACMIObject aObject, DateTime updateTime)
         {
 
             TimeSpan diff = updateTime - reference;
@@ -102,10 +111,10 @@ namespace NOBlackBox
                 WriteLine("#" + diff.TotalSeconds);
             }
 
-            WriteLine($"-{aObject.tacviewId:X}");
+            WriteLine($"-{aObject.TacviewId:X}");
         }
 
-        internal void WriteDestroyedEvent(ACMIObject_mono aObject, DateTime updateTime)
+        internal void WriteDestroyedEvent(IACMIObject aObject, DateTime updateTime)
         {
             TimeSpan diff = updateTime - reference;
             if (diff != lastUpdate)
@@ -118,14 +127,14 @@ namespace NOBlackBox
             if (Configuration.DestructionEvents.Value == true)
             {
                 WriteLine("#" + diff.TotalSeconds);
-                if (aObject.destroyedEvent)
+                if (aObject.DestroyedEvent)
                 {
-                    WriteLine($"0,Event=Message|{aObject.tacviewId:X}|Has been destroyed.");
+                    WriteLine($"0,Event=Message|{aObject.TacviewId:X}|Has been destroyed.");
                 }
             }
         }
 
-        internal void WriteRepairedEvent(ACMIObject_mono aObject, DateTime updateTime)
+        internal void WriteRepairedEvent(IACMIObject aObject, DateTime updateTime)
         {
             TimeSpan diff = updateTime - reference;
             if (diff != lastUpdate)
@@ -138,9 +147,9 @@ namespace NOBlackBox
             if (Configuration.DestructionEvents.Value == true)
             {
                 WriteLine("#" + diff.TotalSeconds);
-                if (aObject.destroyedEvent)
+                if (aObject.DestroyedEvent)
                 {
-                    WriteLine($"0,Event=Message|{aObject.tacviewId:X}|Has been repaired.");
+                    WriteLine($"0,Event=Message|{aObject.TacviewId:X}|Has been repaired.");
                 }
             }
         }
@@ -151,12 +160,33 @@ namespace NOBlackBox
             return string.Join(",", propStrings);
         }
 
+        // "<id>,<key>=<value>,..." for an object line, the same text as $"{id:X},{StringifyProps(props)}" without the
+        // LINQ, the array and the join
+        private string StringifyProps(long tacviewId, Dictionary<string, string> props)
+        {
+            line.Clear();
+            line.Append(tacviewId.ToString("X")).Append(',');
+            bool first = true;
+            foreach (KeyValuePair<string, string> x in props)
+            {
+                if (!first)
+                {
+                    line.Append(',');
+                }
+                first = false;
+                line.Append(x.Key).Append('=').Append(x.Value);
+            }
+            return line.ToString();
+        }
+
         internal void WriteLine(string line)
         {
-            if ((DateTime.Now - lastFlushTime).TotalSeconds > Configuration.AutoSaveInterval)
+            double now = flushClock.Elapsed.TotalSeconds;
+            if (now - lastFlushSeconds > Configuration.AutoSaveInterval)
             {
                 output.Flush();
                 lastFlushTime = DateTime.Now;
+                lastFlushSeconds = now;
                 //output.Close();
                 //output = new StreamWriter(filename, append: true);
             }

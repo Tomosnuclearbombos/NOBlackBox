@@ -96,13 +96,13 @@ namespace NOBlackBox
                     props.Add("Registration", aircraft.Player.SteamID.ToString());
                 }
             }
-            Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
-            props = [];
+            Recorder_mono.Current!.invokeWriterUpdate(this);
+            props.Clear();
             this.enabled = true;
             base.enabled = true;
         }
 
-        public override void Update()
+        public override void Tick()
         {
 
             base.destroyedEvent = !aircraft.IsLanded();
@@ -130,8 +130,8 @@ namespace NOBlackBox
             UpdateAircraft();
             UpdateState();
             UpdateTargets();
-            Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
-            props = [];
+            Recorder_mono.Current!.invokeWriterUpdate(this);
+            props.Clear();
             timer = 0;
         }
 

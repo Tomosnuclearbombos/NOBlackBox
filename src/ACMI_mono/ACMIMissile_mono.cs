@@ -62,12 +62,12 @@ namespace NOBlackBox
                 { "CallSign", $"{missile.definition.unitName} {tacviewId:X}" },
                 { "Debug", lastState.ToString()}
             };
-            Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
-            props = [];
+            Recorder_mono.Current!.invokeWriterUpdate(this);
+            props.Clear();
             this.enabled = true;
             base.enabled = true;
         }
-        public override void Update()
+        public override void Tick()
         {
             if (!this.enabled || unit.disabled)
             {
@@ -81,8 +81,8 @@ namespace NOBlackBox
             UpdatePose();
             UpdateState();
             UpdateMissile();
-            Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
-            props = [];
+            Recorder_mono.Current!.invokeWriterUpdate(this);
+            props.Clear();
             timer = 0;
         }
 

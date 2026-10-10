@@ -17,6 +17,10 @@ namespace NOBlackBox
         private volatile bool _shouldClose = false;
         private ConcurrentQueue<string> _lineQueue;
         private Task _writeTask;
+        // Tomo's Nukes performance build (2026-10-06): the write loop used to go straight round again when there was
+        // nothing to write, so this thread spun a whole CPU core for the entire recording. It now sleeps on this until a
+        // line, a flush or the close arrives. Same lines, same order.
+        private readonly ManualResetEventSlim _wake = new ManualResetEventSlim(false);
 
         public MultiThreadedStreamWriter(StreamWriter writer)
         {
@@ -73,6 +77,13 @@ namespace NOBlackBox
                     _writer.WriteLine(newLine);
                     linesWrittenThisLoop++;
                 }
+
+                if (linesWrittenThisLoop == 0)
+                {
+                    // WriteLine, Flush and Close set _wake after queueing or flagging, so nothing can be missed here
+                    _wake.Wait();
+                    _wake.Reset();
+                }
             }
         }
 
@@ -88,6 +99,7 @@ namespace NOBlackBox
             {
                 _shouldFlush = true;
             }
+            _wake.Set();
         }
 
         public void Close()
@@ -97,12 +109,14 @@ namespace NOBlackBox
             {
                 _shouldClose = true;
             }
+            _wake.Set();
             _writeTask.Wait();
         }
 
         public void WriteLine(string line)
         {
             _lineQueue.Enqueue(line);
+            _wake.Set();
         }
     }
 }

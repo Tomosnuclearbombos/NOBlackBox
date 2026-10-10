@@ -7,14 +7,26 @@ using UnityEngine;
 
 namespace NOBlackBox
 {
-    internal class ACMITracer_mono : ACMIObject_mono
+    // One gun round. Tomo's Nukes performance build (2026-10-06): a plain object ticked by Recorder_mono instead of a new
+    // GameObject plus component per round (20,000 to 57,000 rounds in a match, and the empty GameObjects were never
+    // destroyed). Same lines, same frames.
+    internal class ACMITracer : IACMIObject
     {
         private static int BULLETID = 0;
+
+        public long unitId;
+        public long tacviewId;
+        internal bool enabled = true;
+        public Dictionary<string, string> props = [];
 
         public BulletSim sim;
         public BulletSim.Bullet bullet;
 
         private Vector3 lastPos = new(float.NaN, float.NaN, float.NaN);
+
+        long IACMIObject.TacviewId => tacviewId;
+        Dictionary<string, string> IACMIObject.Props => props;
+        bool IACMIObject.DestroyedEvent => false;
 
         // A round gets two positions: where it was fired from and where it ended. Tacview draws the line between them,
         // so there are no updates in flight. firedFrom comes from BulletFiredPatch; a round it missed starts where the
@@ -23,33 +35,31 @@ namespace NOBlackBox
         {
             this.sim = sim;
             this.bullet = bullet;
-            base.unitId = (long)(Interlocked.Increment(ref BULLETID) - 1) | (1L << 33);
-            base.tacviewId = base.unitId;
+            unitId = (long)(Interlocked.Increment(ref BULLETID) - 1) | (1L << 33);
+            tacviewId = unitId;
             props = new Dictionary<string, string>()
             {
                 { "Type", "Misc+Projectile+Shell" }
             };
             UpdatePose(firedFrom ?? bullet.position);
 
-            Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
-            props = [];
+            Recorder_mono.Current!.invokeWriterUpdate(this);
+            props.Clear();
         }
 
-        public virtual void LateUpdate()
+        public virtual void LateTick()
         {
             // Bullet.tracer is only the visual and is always null on a dedicated server (AddBullet skips it when headless).
             // The game sets active = false when the round hits something or self destructs, with position where it ended.
             if (sim == null || !bullet.active)
             {
                 UpdatePose(bullet.position);
-                Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
-                props = [];
-                this.enabled = false;
-                base.enabled = false;
-                Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterRemove(this);
+                Recorder_mono.Current!.invokeWriterUpdate(this);
+                props.Clear();
+                enabled = false;
+                Recorder_mono.Current!.invokeWriterRemove(this);
                 Plugin.Logger?.LogDebug($"DISABLING TRACER {unitId.ToString(CultureInfo.InvariantCulture)}");
-                props = [];
-                GameObject.Destroy(this);
+                props.Clear();
             }
         }
 

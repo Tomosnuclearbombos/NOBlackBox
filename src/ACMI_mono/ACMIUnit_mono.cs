@@ -36,17 +36,17 @@ namespace NOBlackBox
                 { "Color", faction == null ? "Green" : (faction.factionName == "Boscali" ? "Blue" : "Red") },
                 { "Debug", lastState.ToString()}
             };
-            Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
-            props = [];
+            Recorder_mono.Current!.invokeWriterUpdate(this);
+            props.Clear();
             this.enabled = true;
             base.enabled = true;
             */
         }
-        public override void Update()
+        public override void Tick()
         {
 
         }
-        public virtual void LateUpdate()
+        public override void LateTick()
         {
             try
             {
@@ -55,15 +55,15 @@ namespace NOBlackBox
                     base.disabled = true;
                     props.Add("Visible", "0.0");
                     props.Add("Type", null);
-                    Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterUpdate(this);
-                    props = [];
+                    Recorder_mono.Current!.invokeWriterUpdate(this);
+                    props.Clear();
                     if (base.destroyedEvent && !purge)
                     {
-                        Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterDestroy(this);
+                        Recorder_mono.Current!.invokeWriterDestroy(this);
                     }
                     if (purge)
                     {
-                        Plugin.recorderMono.GetComponent<Recorder_mono>().invokeWriterRemove(this);
+                        Recorder_mono.Current!.invokeWriterRemove(this);
                         this.enabled = false;
                         Plugin.Logger?.LogDebug($"DISABLING UNIT {unitId.ToString(CultureInfo.InvariantCulture)}");
                         GameObject.Destroy(this);
@@ -138,7 +138,7 @@ namespace NOBlackBox
             long id = -1;
             try
             {
-                id = Plugin.recorderMono.GetComponent<Recorder_mono>().unitObjects[unitId].GetComponent<ACMIUnit_mono>().tacviewId;
+                id = Recorder_mono.Current!.unitObjects[unitId].GetComponent<ACMIUnit_mono>().tacviewId;
             } catch
             {
                 Plugin.Logger?.LogDebug($"GetTacviewIdofUnit failed to look up UNIT ID {unitId}");
