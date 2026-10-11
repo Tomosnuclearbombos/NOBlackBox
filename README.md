@@ -24,12 +24,16 @@ are my changes on top of 0.3.8.5:
 * **Two memory leak fixes.** Finished gun rounds now leave the record of rounds already seen, and dead
   units, pilots and shockwaves are cleaned up properly, so those lists stop growing over a long
   mission.
+* **Explosions.** Each explosion is recorded once, at its real blast radius. The original wrote one more
+  size update after removing an explosion, which brought it back in Tacview, and my first leak fix had
+  the recorder pick the same explosion up again every half second for about 10 seconds after the blast.
 
 The plugin GUID, version and config file are the same as the official build, so it drops in over it.
-The DLL is on the [releases page](https://github.com/Tomosnuclearbombos/NOBlackBox/releases). Of note,
-each player's Steam ID still goes in their aircraft's Registration label unless `RecordSteamID = false`
-is set in `BepInEx/config/xyz.KopterBuzz.NOBlackBox.cfg`, which is worth doing if you share your
-recordings.
+The download on the [releases page](https://github.com/Tomosnuclearbombos/NOBlackBox/releases) is the
+whole `NOBlackBox` folder, so it unzips straight into `BepInEx/plugins/`, over an existing install too.
+Of note, each player's Steam ID still goes in their aircraft's Registration label unless
+`RecordSteamID = false` is set in `BepInEx/config/xyz.KopterBuzz.NOBlackBox.cfg`,
+which is worth doing if you share your recordings.
 
 The rest of this page is the original README.
 
