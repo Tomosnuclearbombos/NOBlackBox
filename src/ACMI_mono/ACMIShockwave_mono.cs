@@ -51,6 +51,10 @@ namespace NOBlackBox
 
         public override void Tick()
         {
+            if (done)
+            {
+                return;
+            }
             try
             {
                 shockWaveTimer += Time.deltaTime;
@@ -59,19 +63,39 @@ namespace NOBlackBox
                 {
                     return;
                 }
-                float radius = MathF.Round(((float)propagation.GetValue(shockwave)), 2);
-                waveSpeed = (radius - lastRadius) / timer;
-                
-                if (radius == lastRadius || !shockwave.enabled || !shockwave || waveSpeed <= 0f || radius >= blastRadius || (blastRadius <= 1000 && shockWaveTimer > 3f))
+                if (!shockwave || !shockwave.enabled)
                 {
                     DisableShockWave();
+                    return;
                 }
+                // 2026-10-11: the game sets blastRadius in Shockwave.Start, so a blast found in the frame it was made
+                // reads 0 until then. It waits for the real value instead of ending straight away.
+                if (blastRadius <= 0f)
+                {
+                    blastRadius = (float)blastRadiusField.GetValue(shockwave);
+                    if (blastRadius <= 0f)
+                    {
+                        return;
+                    }
+                }
+                // 2026-10-11: the game's wave keeps growing at 340 m/s for about 10 s after the blast while its dust
+                // fades (out to about 3.5 km for a bomb), so the explosion is recorded up to its real blast radius and
+                // ends there. The radius is written before the removal, never after it: a Radius line after the
+                // removal brought the removed explosion back as a new object.
+                float propagated = (float)propagation.GetValue(shockwave);
+                float radius = MathF.Round(Math.Min(propagated, blastRadius), 2);
+                waveSpeed = (radius - lastRadius) / timer;
+                bool stalled = radius <= lastRadius;
                 props.Add("Radius", radius.ToString("0.##", CultureInfo.InvariantCulture));
                 Recorder_mono.Current!.invokeWriterUpdate(this);
                 props.Clear();
                 timer = 0f;
                 lastRadius = radius;
                 Plugin.Logger?.LogDebug($"Shockwave {SHOCKWAVEID.ToString(CultureInfo.InvariantCulture)}Blast Radius: {blastRadius.ToString(CultureInfo.InvariantCulture)}, Current Radius: {radius.ToString(CultureInfo.InvariantCulture)}, Speed: {waveSpeed.ToString(CultureInfo.InvariantCulture)}");
+                if (propagated >= blastRadius || stalled || (blastRadius <= 1000 && shockWaveTimer > 3f))
+                {
+                    DisableShockWave();
+                }
             } catch
             {
                 DisableShockWave();
@@ -79,8 +103,15 @@ namespace NOBlackBox
 
         }
 
+        private bool done = false;
+
         private void DisableShockWave()
         {
+            if (done)
+            {
+                return;
+            }
+            done = true;
             Recorder_mono.Current!.invokeWriterRemove(this);
             Plugin.Logger?.LogDebug($"DISABLING SHOCKWAVE {unitId.ToString(CultureInfo.InvariantCulture)}");
             this.enabled = false;

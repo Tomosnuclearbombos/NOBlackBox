@@ -403,7 +403,9 @@ namespace NOBlackBox
             List<Shockwave> deadWaves = null;
             foreach (KeyValuePair<Shockwave, GameObject> kv in waves)
             {
-                if (null == kv.Value)
+                // 2026-10-11: dropped only once the game's own shockwave is gone. It lives about 10 s past its blast while
+                // the dust fades, and dropping it when our explosion ended had every scan record it again as a new one.
+                if (null == kv.Key)
                     (deadWaves ??= new List<Shockwave>()).Add(kv.Key);
             }
             if (deadWaves != null)
