@@ -27,6 +27,17 @@ are my changes on top of 0.3.8.5:
 * **Explosions.** Each explosion is recorded once, at its real blast radius. The original wrote one more
   size update after removing an explosion, which brought it back in Tacview, and my first leak fix had
   the recorder pick the same explosion up again every half second for about 10 seconds after the blast.
+* **Main thread time (build 3).** This is the biggest change so far. The recorder was still searching the
+  whole scene for new units every second and for explosions every half second, calling every recorded
+  object twice a frame and turning every number into text on the game's main thread, which came to 54 to
+  85 ms of every second on my PvE server with 16 or more players on. It now hears about new units,
+  destroyed units and explosions from the game, only visits an object when its next update is due, and the
+  writer thread builds the text, so it takes about 80% less of the main thread. A check build ran the old
+  and new code side by side with 40 AI and they wrote the same 176,000 lines, however, dead missiles are
+  no longer recorded two or three times, which my first leak fix had caused.
+* **Smaller fixes (build 3).** EngineRPM is no longer written given its average started at NaN and it
+  never became a number. A recording is also closed once now, as it could be closed two or three times at
+  the end of a mission and make two zips of the same file.
 
 The plugin GUID, version and config file are the same as the official build, so it drops in over it.
 The download on the [releases page](https://github.com/Tomosnuclearbombos/NOBlackBox/releases) is the
