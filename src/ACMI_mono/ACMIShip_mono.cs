@@ -52,7 +52,7 @@ namespace NOBlackBox
             int.TryParse(info[3], out range2);
             if (range1 > range2) { winningRange = range1; } else { winningRange = range2; }
 
-            props = new Dictionary<string, string>()
+            props = new PropBag()
             {
                 { "Name", base.unit.definition.unitName },
                 { "Coalition", faction?.factionName ?? "Neutral" },
@@ -68,14 +68,12 @@ namespace NOBlackBox
             base.enabled = true;
         }
 
-        public override void Tick()
+        internal override int TickRate => RateVehicle;
+
+        // 2026-10-12: the old Tick after its timer check (the recorder keeps the timer and calls this when it is due)
+        internal override void DueTick()
         {
             if (!this.enabled || unit.disabled)
-            {
-                return;
-            }
-            timer += Time.deltaTime;
-            if (timer < Configuration.vehicleUpdateDelta.Value)
             {
                 return;
             }
@@ -84,7 +82,6 @@ namespace NOBlackBox
             UpdateState();
             Recorder_mono.Current!.invokeWriterUpdate(this);
             props.Clear();
-            timer = 0;
         }
 
         // Tomo's Nukes performance build (2026-10-06): no UpdateTargets override. The upstream one called

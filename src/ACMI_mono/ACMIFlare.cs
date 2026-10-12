@@ -19,7 +19,7 @@ namespace NOBlackBox
         public long tacviewId;
         internal float timer = 0f;
         internal bool enabled = true;
-        public Dictionary<string, string> props = [];
+        public PropBag props = new PropBag(2);   // 2026-10-12: one small store per flare, reused
 
         // Unity gave a component added during the physics step its first Update in that same frame, and one added
         // during the Update pass its first Update in the next frame. A destroyed component got no calls from the next
@@ -33,7 +33,7 @@ namespace NOBlackBox
         public IRFlare flare;
 
         long IACMIObject.TacviewId => tacviewId;
-        Dictionary<string, string> IACMIObject.Props => props;
+        PropBag IACMIObject.Props => props;
         bool IACMIObject.DestroyedEvent => false;
 
         internal bool Gone => destroyedFrame < Time.frameCount;
@@ -45,10 +45,8 @@ namespace NOBlackBox
             this.flare = source.transform.gameObject.GetComponent<IRFlare>();
             unitId = (long)(Interlocked.Increment(ref FLAREID) - 1) | (1L << 32);
             tacviewId = unitId;
-            props = new Dictionary<string, string>()
-            {
-                {"Type","Misc+Decoy+Flare" }
-            };
+            props.Clear();
+            props.Add("Type", "Misc+Decoy+Flare");
             try
             {
                 Recorder_mono.Current!.invokeWriterUpdate(this);
@@ -75,7 +73,8 @@ namespace NOBlackBox
 
         public virtual void LateTick()
         {
-            if  (flare == null || !flare.enabled || null == flare.transform.position)
+            // 2026-10-12: the position read that was here compared a Vector3 with null, which is never true
+            if  (flare == null || !flare.enabled)
             {
                 DisableFlare();
             }
@@ -93,7 +92,11 @@ namespace NOBlackBox
 
                 if (newPos != lastPos)
                 {
-                    props.Add("T", UpdatePosition(newPos).ToString(CultureInfo.InvariantCulture));
+                    // the text is built on the writer thread (PropBag / PoseText.Point)
+                props.AddPose5("T", newPos, lastPos);
+#if SHADOW
+                Shadow.Expect(props, UpdatePosition(newPos).ToString(CultureInfo.InvariantCulture));
+#endif
 
                     lastPos = newPos;
                 }
@@ -104,6 +107,8 @@ namespace NOBlackBox
 
         }
 
+#if SHADOW
+        // the old main-thread text, kept in the check build to prove the writer thread writes the same
         private string UpdatePosition(Vector3 newPos)
         {
             string x = Mathf.Approximately(newPos.x, lastPos.x) ? "" : newPos.x.ToString(CultureInfo.InvariantCulture);
@@ -114,6 +119,7 @@ namespace NOBlackBox
 
             return $"{(newPos.x != lastPos.x ? longitude.ToString(CultureInfo.InvariantCulture) : string.Empty)}|{(newPos.z != lastPos.z ? latitude.ToString(CultureInfo.InvariantCulture) : string.Empty)}|{y}|{x}|{z}";
         }
+#endif
 
         private void DisableFlare()
         {

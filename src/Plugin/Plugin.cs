@@ -97,6 +97,8 @@ namespace NOBlackBox
             {
                 base.Logger.LogWarning($"Gun round fire hook not applied, rounds start where the bullet discovery finds them: {e.Message}");
             }
+            // 2026-10-12: new units, disabled flags and shockwaves from the game instead of scene searches
+            DiscoveryPatches.Apply(new Harmony("xyz.KopterBuzz.NOBlackBox.discovery"), base.Logger);
 
         }
         private void Update()

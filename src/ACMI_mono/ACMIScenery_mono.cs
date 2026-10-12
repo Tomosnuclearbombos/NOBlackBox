@@ -16,7 +16,7 @@ namespace NOBlackBox.src.ACMI_mono
             base.destroyedEvent = true;
             lastState = unit.unitState;
             //Faction? faction = this.unit.NetworkHQ?.faction;
-            props = new Dictionary<string, string>()
+            props = new PropBag()
             {
                 { "Name", this.unit.definition.unitName },
                 { "CallSign", $"{scenery.definition.code} {tacviewId:X}"},

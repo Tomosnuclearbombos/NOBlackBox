@@ -30,7 +30,7 @@ namespace NOBlackBox
             base.unitId = (long)(Interlocked.Increment(ref SHOCKWAVEID) - 1) | (1L << 34);
             base.tacviewId = unitId;
             (float lat, float lon) = Helpers.CartesianToGeodetic(pos.GlobalX(), pos.GlobalZ());
-            props = new Dictionary<string, string>()
+            props = new PropBag()
             {
                 { "T", $"{
                     lon.ToString(CultureInfo.InvariantCulture)
@@ -48,6 +48,9 @@ namespace NOBlackBox
             Recorder_mono.Current!.invokeWriterUpdate(this);
             props.Clear();
         }
+
+        // ticked every frame, as before (its radius grows every frame)
+        internal override int TickRate => 0;
 
         public override void Tick()
         {
@@ -86,7 +89,7 @@ namespace NOBlackBox
                 float radius = MathF.Round(Math.Min(propagated, blastRadius), 2);
                 waveSpeed = (radius - lastRadius) / timer;
                 bool stalled = radius <= lastRadius;
-                props.Add("Radius", radius.ToString("0.##", CultureInfo.InvariantCulture));
+                Num("Radius", radius, PropBag.Num2, CultureInfo.InvariantCulture);
                 Recorder_mono.Current!.invokeWriterUpdate(this);
                 props.Clear();
                 timer = 0f;

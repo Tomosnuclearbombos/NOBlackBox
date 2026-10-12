@@ -11,7 +11,7 @@ namespace NOBlackBox
     internal interface IACMIObject
     {
         long TacviewId { get; }
-        Dictionary<string, string> Props { get; }
+        PropBag Props { get; }
         bool DestroyedEvent { get; }
     }
 
@@ -28,13 +28,24 @@ namespace NOBlackBox
         internal bool disabled = false;
         internal bool destroyedEvent = false;
         internal new bool enabled = true;
+#if RECPROF
+        internal int profKind = -1;   // RecProf (timing-only build)
+#endif
+        // 2026-10-12: the recorder's order of creation (lines in one frame keep the old object order), the frame it was
+        // created in (it gets its first tick the next frame, as before), and whether it waits in the disabled queue
+        internal int seq;
+        internal int createdFrame;
+        internal bool lateQueued;
+#if SHADOW
+        internal float shadowTimer;   // check build: the old per-object timer
+#endif
 
         public event Action<string, long[], string>? OnEvent;
 
-        public Dictionary<string, string> props = [];
+        public PropBag props = new PropBag();
 
         long IACMIObject.TacviewId => tacviewId;
-        Dictionary<string, string> IACMIObject.Props => props;
+        PropBag IACMIObject.Props => props;
         bool IACMIObject.DestroyedEvent => destroyedEvent;
 
         public virtual void Init()
@@ -46,6 +57,26 @@ namespace NOBlackBox
         {
 
         }
+
+        // 2026-10-12: the recorder calls this only when the object's update is due (it keeps the timer), so most objects
+        // are no longer touched every frame. What used to run before the timer check runs here first, then the work.
+        internal virtual void DueTick()
+        {
+
+        }
+
+        // 2026-10-12: a number the writer thread turns into text, value.ToString("0.##" or "0.###", culture) as before
+        internal void Num(string key, float value, byte kind, CultureInfo culture)
+        {
+            props.AddNum(key, value, kind, culture);
+#if SHADOW
+            Shadow.Expect(props, value.ToString(kind == PropBag.Num3 ? "0.###" : "0.##", culture));
+#endif
+        }
+
+        // which update rate the recorder schedules it on: -1 none (nothing to tick), 0 every frame, else a Rate* value
+        internal virtual int TickRate => -1;
+        internal const int RateAircraft = 1, RateVehicle = 2, RateMunition = 3, RateBuilding = 4;
 
         public virtual void LateTick()
         {

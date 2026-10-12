@@ -37,8 +37,6 @@ namespace NOBlackBox
         private float lastPitch = float.NaN;
         private float lastYaw = float.NaN;
         private float lastRoll = float.NaN;
-        private float lastThrust = float.NaN;
-        private float avgThrust = float.NaN;
 
         private Vector3 lastHead = Vector3.zero;
 
@@ -73,7 +71,7 @@ namespace NOBlackBox
             {
                 info = Plugin.NOBlackBoxUnitInfo["aircraft"][unit.definition.code];
             }
-            props = new Dictionary<string, string>()
+            props = new PropBag()
             {
                 { "Name", this.unit.definition.unitName },
                 { "Coalition", faction?.factionName ?? "Neutral" },
@@ -102,16 +100,19 @@ namespace NOBlackBox
             base.enabled = true;
         }
 
-        public override void Tick()
-        {
+        internal override int TickRate => RateAircraft;
 
+        // 2026-10-12: the old Tick set this every frame for the LateTick of the frame the aircraft is disabled in (the
+        // only time it is read). It is worked out at that moment now, from the same frame's values.
+        internal override void BeforeDisabledLateTick()
+        {
             base.destroyedEvent = !aircraft.IsLanded();
+        }
+
+        // the old Tick after its timer check (the recorder keeps the timer and calls this when the update is due)
+        internal override void DueTick()
+        {
             if (!this.enabled || unit.disabled)
-            {
-                return;
-            }
-            timer += Time.deltaTime;
-            if (timer < Configuration.aircraftUpdateDelta.Value)
             {
                 return;
             }
@@ -127,18 +128,29 @@ namespace NOBlackBox
                 }
             }
             UpdatePose();
+#if RECPROF
+            long t0 = RecProf.On ? RecProf.Now() : 0;
+#endif
             UpdateAircraft();
+#if RECPROF
+            if (RecProf.On) RecProf.Add(RecProf.A_PROPS, t0);
+#endif
             UpdateState();
+#if RECPROF
+            t0 = RecProf.On ? RecProf.Now() : 0;
+#endif
             UpdateTargets();
+#if RECPROF
+            if (RecProf.On) RecProf.Add(RecProf.A_TARGETS, t0);
+#endif
             Recorder_mono.Current!.invokeWriterUpdate(this);
             props.Clear();
-            timer = 0;
         }
 
         internal override void UpdateTargets()
         {
             targets = aircraft.weaponManager.GetTargetList().ToArray();
-            if (targets.Any() && targets != lastTargets)
+            if (targets.Length > 0 && targets != lastTargets)
             {
                 lastTargets = targets;
                 int max = targets.Length;
@@ -165,36 +177,13 @@ namespace NOBlackBox
             }
         }
 
-        private float getAvgThrust()
-        {
-            float avgThrust = float.NaN;
-
-            int count = aircraft.engines.Count;
-            for (int i = 0; i < aircraft.engines.Count; i++)
-            {
-                float thrust = aircraft.engines[i].GetThrust();
-                if (thrust != 0f)
-                {
-                    avgThrust = avgThrust + thrust;
-                }
-                else
-                {
-                    count = count - 1;
-                }
-            }
-            if (avgThrust != 0f)
-            {
-                avgThrust /= count;
-            }
-            return avgThrust;
-        }
-
         void UpdateAircraft()
         {
+            // 2026-10-12: numbers go to the writer thread as numbers, with the same formats (PropBag.AddNum)
             if (aircraft.speed != lastTAS && Configuration.RecordSpeed.Value == true)
             {
-                props.Add("TAS", aircraft.speed.ToString("0.##", CultureInfo.InvariantCulture));
-                props.Add("Mach", (aircraft.speed / 340).ToString("0.###", CultureInfo.InvariantCulture));
+                Num("TAS", aircraft.speed, PropBag.Num2, CultureInfo.InvariantCulture);
+                Num("Mach", (aircraft.speed / 340), PropBag.Num3, CultureInfo.InvariantCulture);
                 lastTAS = aircraft.speed;
             }
 
@@ -203,13 +192,13 @@ namespace NOBlackBox
 
             if (num != lastAOA && Configuration.RecordAOA.Value == true)
             {
-                props.Add("AOA", num.ToString("0.##"));
+                Num("AOA", num, PropBag.Num2, CultureInfo.CurrentCulture);   // as before: the thread's culture
                 lastAOA = num;
             }
 
             if (aircraft.radarAlt != lastAGL && Configuration.RecordAGL.Value == true)
             {
-                props.Add("AGL", Mathf.Max(0, aircraft.radarAlt).ToString("0.##", CultureInfo.InvariantCulture));
+                Num("AGL", Mathf.Max(0, aircraft.radarAlt), PropBag.Num2, CultureInfo.InvariantCulture);
                 lastAGL = aircraft.radarAlt;
             }
 
@@ -259,32 +248,29 @@ namespace NOBlackBox
             if (Configuration.RecordExtraTelemetry.Value == true)
             {
 
-                if (lastThrottle != aircraft.GetInputs().throttle)
+                ControlInputs inputs = aircraft.GetInputs();   // GetInputs returns the same object every call
+                if (lastThrottle != inputs.throttle)
                 {
-                    props.Add("Throttle", aircraft.GetInputs().throttle.ToString("0.##", CultureInfo.InvariantCulture));
-                    lastThrottle = aircraft.GetInputs().throttle;
+                    Num("Throttle", inputs.throttle, PropBag.Num2, CultureInfo.InvariantCulture);
+                    lastThrottle = inputs.throttle;
                 }
-                if (lastRoll != aircraft.GetInputs().roll)
+                if (lastRoll != inputs.roll)
                 {
-                    props.Add("RollControlInput", aircraft.GetInputs().roll.ToString("0.##", CultureInfo.InvariantCulture));
-                    lastRoll = aircraft.GetInputs().roll;
+                    Num("RollControlInput", inputs.roll, PropBag.Num2, CultureInfo.InvariantCulture);
+                    lastRoll = inputs.roll;
                 }
-                if (lastPitch != aircraft.GetInputs().pitch)
+                if (lastPitch != inputs.pitch)
                 {
-                    props.Add("PitchControlInput", aircraft.GetInputs().pitch.ToString("0.##", CultureInfo.InvariantCulture));
-                    lastPitch = aircraft.GetInputs().pitch;
+                    Num("PitchControlInput", inputs.pitch, PropBag.Num2, CultureInfo.InvariantCulture);
+                    lastPitch = inputs.pitch;
                 }
-                if (lastYaw != aircraft.GetInputs().yaw)
+                if (lastYaw != inputs.yaw)
                 {
-                    props.Add("YawControlInput", aircraft.GetInputs().yaw.ToString("0.##", CultureInfo.InvariantCulture));
-                    lastYaw = aircraft.GetInputs().yaw;
+                    Num("YawControlInput", inputs.yaw, PropBag.Num2, CultureInfo.InvariantCulture);
+                    lastYaw = inputs.yaw;
                 }
-                if (lastThrust != getAvgThrust())
-                {
-                    avgThrust = getAvgThrust();
-                    props.Add("EngineRPM", avgThrust.ToString("0.##", CultureInfo.InvariantCulture));
-                    lastThrust = avgThrust;
-                }
+                // 2026-10-12 (owner: "drop the engine RPM"): EngineRPM is no longer written. Its average started from
+                // NaN, so every aircraft line carried EngineRPM=NaN (31% of all lines in a test recording).
             }
         }
 

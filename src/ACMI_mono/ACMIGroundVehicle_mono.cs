@@ -114,7 +114,7 @@ namespace NOBlackBox
                 base.destroyedEvent = true;
             }
 
-            props = new Dictionary<string, string>()
+            props = new PropBag()
             {
                 { "Name", this.unit.definition.unitName },
                 { "Coalition", faction?.factionName ?? "Neutral" },
@@ -129,14 +129,12 @@ namespace NOBlackBox
             this.enabled = true;
             base.enabled = true;
         }
-        public override void Tick()
+        internal override int TickRate => RateVehicle;
+
+        // 2026-10-12: the old Tick after its timer check (the recorder keeps the timer and calls this when it is due)
+        internal override void DueTick()
         {
             if (!this.enabled || unit.disabled)
-            {
-                return;
-            }
-            timer += Time.deltaTime;
-            if (timer < Configuration.vehicleUpdateDelta.Value)
             {
                 return;
             }
@@ -145,7 +143,6 @@ namespace NOBlackBox
             UpdateState();
             Recorder_mono.Current!.invokeWriterUpdate(this);
             props.Clear();
-            timer = 0;
         }
         // Tomo's Nukes performance build (2026-10-06): no UpdateTargets override. The upstream one called
         // targets.AddItem(station.GetTurret().GetTarget()) for every weapon station and threw the result away (AddItem

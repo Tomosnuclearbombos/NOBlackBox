@@ -17,7 +17,7 @@ namespace NOBlackBox
         public long unitId;
         public long tacviewId;
         internal bool enabled = true;
-        public Dictionary<string, string> props = [];
+        public PropBag props = new PropBag(2);   // 2026-10-12: one small store per round, reused
 
         public BulletSim sim;
         public BulletSim.Bullet bullet;
@@ -25,7 +25,7 @@ namespace NOBlackBox
         private Vector3 lastPos = new(float.NaN, float.NaN, float.NaN);
 
         long IACMIObject.TacviewId => tacviewId;
-        Dictionary<string, string> IACMIObject.Props => props;
+        PropBag IACMIObject.Props => props;
         bool IACMIObject.DestroyedEvent => false;
 
         // A round gets two positions: where it was fired from and where it ended. Tacview draws the line between them,
@@ -37,10 +37,8 @@ namespace NOBlackBox
             this.bullet = bullet;
             unitId = (long)(Interlocked.Increment(ref BULLETID) - 1) | (1L << 33);
             tacviewId = unitId;
-            props = new Dictionary<string, string>()
-            {
-                { "Type", "Misc+Projectile+Shell" }
-            };
+            props.Clear();
+            props.Add("Type", "Misc+Projectile+Shell");
             UpdatePose(firedFrom ?? bullet.position);
 
             Recorder_mono.Current!.invokeWriterUpdate(this);
@@ -74,13 +72,19 @@ namespace NOBlackBox
 
             if (newPos != lastPos)
             {
-                props.Add("T", UpdatePosition(newPos).ToString(CultureInfo.InvariantCulture));
+                // the text is built on the writer thread (PropBag / PoseText.Point)
+                props.AddPose5("T", newPos, lastPos);
+#if SHADOW
+                Shadow.Expect(props, UpdatePosition(newPos).ToString(CultureInfo.InvariantCulture));
+#endif
 
                 lastPos = newPos;
             }
 
         }
 
+#if SHADOW
+        // the old main-thread text, kept in the check build to prove the writer thread writes the same
         private string UpdatePosition(Vector3 newPos)
         {
             string x = Mathf.Approximately(newPos.x, lastPos.x) ? "" : newPos.x.ToString(CultureInfo.InvariantCulture);
@@ -91,5 +95,6 @@ namespace NOBlackBox
 
             return $"{(newPos.x != lastPos.x ? longitude.ToString(CultureInfo.InvariantCulture) : string.Empty)}|{(newPos.z != lastPos.z ? latitude.ToString(CultureInfo.InvariantCulture) : string.Empty)}|{y}|{x}|{z}";
         }
+#endif
     }
 }

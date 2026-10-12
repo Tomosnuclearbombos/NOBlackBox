@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -21,8 +22,6 @@ namespace NOBlackBox
         // every line written. It now reads a monotonic clock; lastFlushTime is still kept for the countdown widget.
         private static readonly Stopwatch flushClock = Stopwatch.StartNew();
         private double lastFlushSeconds;
-        // one reused builder for the props of every line (the writer is only called from the main thread)
-        private readonly StringBuilder line = new StringBuilder(256);
         internal string filename;
         internal MapKey currentMapKey;
         internal ACMIWriter(DateTime reference)
@@ -92,12 +91,34 @@ namespace NOBlackBox
             {
                 lastUpdate = diff;
                 //output.WriteLine("#" + diff.TotalSeconds);
-                WriteLine("#" + diff.TotalSeconds);
+                WriteTime(diff.TotalSeconds);
             }
 
             //output.WriteLine($"{aObject.id:X},{StringifyProps(props)}");
-            WriteLine(StringifyProps(aObject.TacviewId, aObject.Props));
+            WriteProps(aObject.TacviewId, aObject.Props);
             //Plugin.Logger.LogDebug($"Time Elapsed = {diff.TotalSeconds}");
+        }
+
+        // 2026-10-12: an object line and its time line are handed to the writer thread as values (LineRec), which builds
+        // the same text the main thread built here: "<id>,<key>=<value>,..." and "#" + seconds
+        private void WriteProps(long tacviewId, PropBag props)
+        {
+            LineRec rec = output.Rent();
+            rec.SetProps(tacviewId, props);
+#if SHADOW
+            rec.expectLine = Shadow.OldLine(tacviewId, props);
+#endif
+            Enqueue(rec);
+        }
+
+        private void WriteTime(double seconds)
+        {
+            LineRec rec = output.Rent();
+            rec.SetTime(seconds, CultureInfo.CurrentCulture);
+#if SHADOW
+            rec.expectLine = "#" + seconds;
+#endif
+            Enqueue(rec);
         }
 
         internal void RemoveObject(IACMIObject aObject, DateTime updateTime)
@@ -160,26 +181,31 @@ namespace NOBlackBox
             return string.Join(",", propStrings);
         }
 
-        // "<id>,<key>=<value>,..." for an object line, the same text as $"{id:X},{StringifyProps(props)}" without the
-        // LINQ, the array and the join
-        private string StringifyProps(long tacviewId, Dictionary<string, string> props)
+        internal void WriteLine(string line)
         {
-            line.Clear();
-            line.Append(tacviewId.ToString("X")).Append(',');
-            bool first = true;
-            foreach (KeyValuePair<string, string> x in props)
-            {
-                if (!first)
-                {
-                    line.Append(',');
-                }
-                first = false;
-                line.Append(x.Key).Append('=').Append(x.Value);
-            }
-            return line.ToString();
+            CheckAutoSave();
+            output.WriteLine(line);
+#if RECPROF
+            RecProf.Line(line.Length);
+#endif
         }
 
-        internal void WriteLine(string line)
+        private void Enqueue(LineRec rec)
+        {
+            CheckAutoSave();
+            output.Write(rec);
+#if RECPROF
+            RecProf.Line(0);
+#endif
+        }
+
+        // wakes the writer thread for the lines queued this frame (Recorder_mono, end of LateUpdate)
+        internal void Signal()
+        {
+            output.Signal();
+        }
+
+        private void CheckAutoSave()
         {
             double now = flushClock.Elapsed.TotalSeconds;
             if (now - lastFlushSeconds > Configuration.AutoSaveInterval)
@@ -190,7 +216,6 @@ namespace NOBlackBox
                 //output.Close();
                 //output = new StreamWriter(filename, append: true);
             }
-            output.WriteLine(line);
         }
 
         internal void Flush()
@@ -198,13 +223,29 @@ namespace NOBlackBox
             output.Flush();
         }
 
+        // 2026-10-12 (bug sweep): closed once. The recorder's OnDisable and OnDestroy both call this, and so does the
+        // finaliser, so a second zip ran on the same file at the same time: "Sharing violation" or "Could not find file"
+        // after every recording on the live servers (10-08 to 10-12), and in the worst timing the zip written twice.
+        private int closed = 0;
+
         internal async void Close()
         {
-            output.Close();
-            string zipPath = await ZipHelper.ZipFileAsync(filename);
-            Plugin.Logger?.LogDebug($"saving compressed acmi {zipPath}");
-            await ZipHelper.DeleteFileAsync(filename);
-            Plugin.Logger?.LogDebug($"deleted uncompressed acmi {filename}");
+            if (System.Threading.Interlocked.Exchange(ref closed, 1) != 0)
+            {
+                return;
+            }
+            try
+            {
+                output.Close();
+                string zipPath = await ZipHelper.ZipFileAsync(filename);
+                Plugin.Logger?.LogDebug($"saving compressed acmi {zipPath}");
+                await ZipHelper.DeleteFileAsync(filename);
+                Plugin.Logger?.LogDebug($"deleted uncompressed acmi {filename}");
+            }
+            catch (Exception e)
+            {
+                UnityEngine.Debug.LogWarning($"[NOBlackBox] closing the recording {Path.GetFileName(filename)}: {e.Message}");
+            }
         }
     }
 }

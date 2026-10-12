@@ -20,7 +20,7 @@ namespace NOBlackBox
             base.destroyedEvent = true;
             lastState = unit.unitState;
             Faction? faction = this.unit.NetworkHQ?.faction;
-            props = new Dictionary<string, string>()
+            props = new PropBag()
             {
                 { "Name", this.unit.definition.unitName },
                 { "CallSign", $"{building.definition.code} {tacviewId:X}"},
@@ -37,13 +37,14 @@ namespace NOBlackBox
             base.enabled = true;
         }
 
-        public override void Tick()
+        internal override int TickRate => RateBuilding;
+
+        // a building handles its own destruction and repair here, so it is not in the recorder's disabled queue
+        internal override bool WatchesDisabled => false;
+
+        // 2026-10-12: the old Tick after its timer check (the recorder keeps the timer and calls this when it is due)
+        internal override void DueTick()
         {
-            timer += Time.deltaTime;
-            if (timer < Configuration.buildingUpdateDelta.Value)
-            {
-                return;
-            }
             if (unit.NetworkHQ?.faction.factionName != coalition && !building.disabled && !base.disabled)
             {
                 coalition = unit.NetworkHQ?.faction.factionName ?? "Neutral";
@@ -88,7 +89,6 @@ namespace NOBlackBox
                 base.disabled = false;
             }
             props.Clear();
-            timer = 0;
         }
 
         public override void LateTick()

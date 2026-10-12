@@ -1,4 +1,4 @@
-﻿using Mirage.Serialization;
+using Mirage.Serialization;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -16,6 +16,8 @@ namespace NOBlackBox
         internal Unit.UnitState lastState;
         internal bool purge = false;
         internal bool canTarget = false;
+        // 2026-10-12: the unit's transform, looked up once (it was looked up six times per position)
+        private Transform? unitTransform;
 
         internal Unit[] lastTargets = [];
         internal Unit[] targets = [];
@@ -29,7 +31,7 @@ namespace NOBlackBox
             base.tacviewId = unit.persistentID.Id + 1;
             lastState = unit.unitState;
             Faction? faction = this.unit.NetworkHQ?.faction;
-            props = new Dictionary<string, string>()
+            props = new PropBag()
             {
                 { "Name", this.unit.definition.unitName },
                 { "Coalition", faction?.factionName ?? "Neutral" },
@@ -46,6 +48,18 @@ namespace NOBlackBox
         {
 
         }
+
+        // 2026-10-12: LateTick only acts on a unit that is disabled, so the recorder calls it only for those (the game
+        // tells it when a unit's disabled flag changes) instead of every recorded object every frame. Buildings handle
+        // their own destruction in their tick and say no here.
+        internal virtual bool WatchesDisabled => true;
+
+        // what the old per-frame Tick worked out before LateTick, for a unit LateTick is about to handle (aircraft)
+        internal virtual void BeforeDisabledLateTick()
+        {
+
+        }
+
         public override void LateTick()
         {
             try
@@ -77,6 +91,8 @@ namespace NOBlackBox
             }
         }
 
+#if SHADOW
+        // the old main-thread text, kept in the check build to prove the writer thread writes the same
         private string UpdatePosition(Vector3 newPos, Vector3 newRot)
         {
             string x = Mathf.Approximately(newPos.x, lastPos.x) ? "" : newPos.x.ToString(CultureInfo.InvariantCulture);
@@ -95,23 +111,44 @@ namespace NOBlackBox
 
             return $"{(newPos.x != lastPos.x ? longitude.ToString(CultureInfo.InvariantCulture) : string.Empty)}|{(newPos.z != lastPos.z ? latitude.ToString(CultureInfo.InvariantCulture) : string.Empty)}|{y}|{roll}|{pitch}|{yaw}|{x}|{z}|{yaw}";
         }
+#endif
 
         internal void UpdatePose()
         {
-            float fx = MathF.Round(unit.transform.position.GlobalX(), 2);
-            float fy = MathF.Round(unit.transform.position.GlobalY(), 2);
-            float fz = MathF.Round(unit.transform.position.GlobalZ(), 2);
+#if RECPROF
+            long tRead = RecProf.On ? RecProf.Now() : 0;
+#endif
+            // 2026-10-12: one position and one rotation read (the same values the six reads returned)
+            unitTransform ??= unit.transform;
+            Vector3 position = unitTransform.position;
+            Vector3 angles = unitTransform.eulerAngles;
+            float fx = MathF.Round(position.GlobalX(), 2);
+            float fy = MathF.Round(position.GlobalY(), 2);
+            float fz = MathF.Round(position.GlobalZ(), 2);
 
-            float fax = MathF.Round(unit.transform.eulerAngles.x, 2);
-            float fay = MathF.Round(unit.transform.eulerAngles.y, 2);
-            float faz = MathF.Round(unit.transform.eulerAngles.z, 2);
+            float fax = MathF.Round(angles.x, 2);
+            float fay = MathF.Round(angles.y, 2);
+            float faz = MathF.Round(angles.z, 2);
 
             Vector3 newPos = new(fx, fy, fz);
             Vector3 newRot = new(fax, fay, faz);
+#if RECPROF
+            if (RecProf.On) RecProf.Add(RecProf.P_READ, tRead);
+#endif
 
             if (newPos != lastPos || newRot != lastRot)
             {
-                props.Add("T", UpdatePosition(newPos, newRot).ToString(CultureInfo.InvariantCulture));
+#if RECPROF
+                long tFmt = RecProf.On ? RecProf.Now() : 0;
+#endif
+                // the text is built on the writer thread (PropBag / PoseText.Unit)
+                props.AddPose9("T", newPos, newRot, lastPos, lastRot);
+#if SHADOW
+                Shadow.Expect(props, UpdatePosition(newPos, newRot).ToString(CultureInfo.InvariantCulture));
+#endif
+#if RECPROF
+                if (RecProf.On) RecProf.Add(RecProf.P_FMT, tFmt);
+#endif
 
                 lastPos = newPos;
                 lastRot = newRot;
@@ -133,12 +170,19 @@ namespace NOBlackBox
         }
 
 
+        // 2026-10-12: the recorder's own id map instead of a GetComponent call per target per update (same answer: the
+        // recorded object's tacviewId, or -1 when the unit is not recorded or its object is gone)
         internal long GetTacviewIdOfUnit(long unitId)
         {
             long id = -1;
             try
             {
-                id = Recorder_mono.Current!.unitObjects[unitId].GetComponent<ACMIUnit_mono>().tacviewId;
+                ACMIUnit_mono? recorded = Recorder_mono.Current!.RecordedUnit(unitId);
+                if (recorded == null)
+                {
+                    throw new KeyNotFoundException();
+                }
+                id = recorded.tacviewId;
             } catch
             {
                 Plugin.Logger?.LogDebug($"GetTacviewIdofUnit failed to look up UNIT ID {unitId}");

@@ -53,7 +53,7 @@ namespace NOBlackBox
 
             lastState = missile.unitState;
             Faction? faction = base.unit.NetworkHQ?.faction;
-            props = new Dictionary<string, string>()
+            props = new PropBag()
             {
                 { "Name", base.unit.definition.unitName },
                 { "Coalition", faction?.factionName ?? "Neutral" },
@@ -67,23 +67,26 @@ namespace NOBlackBox
             this.enabled = true;
             base.enabled = true;
         }
-        public override void Tick()
+        internal override int TickRate => RateMunition;
+
+        // 2026-10-12: the old Tick after its timer check (the recorder keeps the timer and calls this when it is due)
+        internal override void DueTick()
         {
             if (!this.enabled || unit.disabled)
             {
                 return;
             }
-            timer += Time.deltaTime;
-            if (timer < Configuration.munitionUpdateDelta.Value)
-            {
-                return;
-            }
             UpdatePose();
             UpdateState();
+#if RECPROF
+            long t0 = RecProf.On ? RecProf.Now() : 0;
+#endif
             UpdateMissile();
+#if RECPROF
+            if (RecProf.On) RecProf.Add(RecProf.M_PROPS, t0);
+#endif
             Recorder_mono.Current!.invokeWriterUpdate(this);
             props.Clear();
-            timer = 0;
         }
 
         void UpdateMissile()
@@ -98,8 +101,8 @@ namespace NOBlackBox
 
             if (unit.speed != lastTAS && Configuration.RecordSpeed.Value == true)
             {
-                props.Add("TAS", unit.speed.ToString("0.##", CultureInfo.InvariantCulture));
-                props.Add("Mach", (unit.speed / 340).ToString("0.##", CultureInfo.InvariantCulture));
+                Num("TAS", unit.speed, PropBag.Num2, CultureInfo.InvariantCulture);
+                Num("Mach", (unit.speed / 340), PropBag.Num2, CultureInfo.InvariantCulture);
                 lastTAS = unit.speed;
             }
 
@@ -108,13 +111,13 @@ namespace NOBlackBox
 
             if (num != lastAOA && Configuration.RecordAOA.Value == true)
             {
-                props.Add("AOA", num.ToString("0.##", CultureInfo.InvariantCulture));
+                Num("AOA", num, PropBag.Num2, CultureInfo.InvariantCulture);
                 lastAOA = num;
             }
 
             if (unit.radarAlt != lastAGL && Configuration.RecordAGL.Value == true)
             {
-                props.Add("AGL", unit.radarAlt.ToString("0.##", CultureInfo.InvariantCulture));
+                Num("AGL", unit.radarAlt, PropBag.Num2, CultureInfo.InvariantCulture);
                 lastAGL = unit.radarAlt;
             }
             
