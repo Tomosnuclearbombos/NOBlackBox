@@ -38,6 +38,20 @@ are my changes on top of 0.3.8.5:
 * **Smaller fixes (build 3).** EngineRPM is no longer written given its average started at NaN and it
   never became a number. A recording is also closed once now, as it could be closed two or three times at
   the end of a mission and make two zips of the same file.
+* **Every detonation (build 4).** The recorder only picked up explosions that came with one of the game's
+  shockwaves, so a missile or bomb that went off without one had no explosion in the recording. Every
+  warhead that goes off is now recorded as a short explosion at the blast point, with the weapon's name, its
+  blast radius and whether it was armed.
+* **Targets, radar and ranges (build 4).** A pilot's selected targets are now written with one target as
+  well as several, and cleared when the list empties or gets shorter, where before only lists of two or more
+  were written and they were never cleared. RadarMode now changes when the radar is switched on or off.
+  Ships and ground units get their engagement range from their own radar and sight ranges in the game, the
+  same values as the game's map range ring, instead of a table typed in by hand that had gaps, so units
+  without a radar now show their sight range.
+* **Zips (build 4).** A server stopped mid-mission could leave a broken `.zip.acmi`, given the zip ran in
+  the background and the game exited before it was done. The zip is now written as `.zip.acmi.part` and
+  renamed once it's complete, a game that shuts down normally finishes the zip before it exits, and
+  leftover `.part` files are cleared when the recorder loads.
 
 The plugin GUID, version and config file are the same as the official build, so it drops in over it.
 The download on the [releases page](https://github.com/Tomosnuclearbombos/NOBlackBox/releases) is the
