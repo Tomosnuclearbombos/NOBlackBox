@@ -101,12 +101,9 @@ namespace NOBlackBox
                 info = Plugin.NOBlackBoxUnitInfo["vehicles"][unit.definition.unitName];
                 Plugin.Logger?.LogDebug($"UNIT {unit.definition.unitName} TYPE: {info[1]}");
             }
-            int range1 = 0;
-            int range2 = 0;
-            int winningRange = 0;
-            int.TryParse(info[2], out range1);
-            int.TryParse(info[3], out range2);
-            if (range1 > range2) { winningRange = range1;  } else { winningRange = range2; }
+            // Tomo's Nukes 2026-10-20: the larger of its radar and sight ranges, read from the unit's own detectors; the
+            // table is only the fallback (ACMIUnit_mono.EngagementRangeOf)
+            int winningRange = EngagementRangeOf(base.unit, info);
 
 
             if (new[] { "AA", "CIWS (L)", "CRAM", "SAM IR", "SAM R", "SPAAG", "RDR", "HPAD", "HGR-H", "HGR-M", "REV" }.Any(c => unit.definition.code.Contains(c)))

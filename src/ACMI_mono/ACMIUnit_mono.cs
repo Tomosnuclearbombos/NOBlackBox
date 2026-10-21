@@ -190,5 +190,51 @@ namespace NOBlackBox
             }
             return id;
         }
+
+        // Tomo's Nukes 2026-10-20: a ship's or ground vehicle's EngagementRange from its own detectors, read the way the
+        // game's map range ring reads them (MapToolTip): every TargetDetector under the unit, the larger of the radars'
+        // max range (Radar.RadarParameters.maxRange) and the sight range (TargetDetector.visualRange). These are prefab
+        // values, there before the recorder sees the unit, and a headless server keeps them. The hand-typed table
+        // (PluginUnitInfo: name, type, optical, radar) had gaps and old names, so it's used only for a unit with no
+        // detector, or if the read fails.
+        private static bool rangeReadFailed = false;
+
+        internal static int EngagementRangeOf(Unit unit, string[] info)
+        {
+            try
+            {
+                TargetDetector[] detectors = unit.transform.GetComponentsInChildren<TargetDetector>();
+                if (detectors.Length > 0)
+                {
+                    float radar = 0f;
+                    float optical = 0f;
+                    foreach (TargetDetector detector in detectors)
+                    {
+                        if (detector is Radar)
+                        {
+                            radar = Math.Max(radar, detector.GetRadarRange());
+                        }
+                        optical = Math.Max(optical, detector.GetVisualRange());
+                    }
+                    return Mathf.RoundToInt(Math.Max(radar, optical));
+                }
+            }
+            catch (Exception e)
+            {
+                if (!rangeReadFailed)
+                {
+                    rangeReadFailed = true;
+                    Plugin.Logger?.LogWarning($"EngagementRange: reading the detectors of {unit.definition.unitName} failed, using the table ({e.Message})");
+                }
+            }
+            int optic = 0;
+            int radarTable = 0;
+            if (info.Length > 3)
+            {
+                int.TryParse(info[2], out optic);
+                int.TryParse(info[3], out radarTable);
+            }
+            return Math.Max(optic, radarTable);
+        }
     }
 }

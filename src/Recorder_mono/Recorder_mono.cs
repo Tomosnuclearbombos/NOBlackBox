@@ -78,6 +78,8 @@ namespace NOBlackBox
         private readonly List<Unit> pendingUnits = [];
         // shockwaves the game started since the last Update (the scene search for them cost 4.5 to 7.5 ms/s)
         private readonly List<Shockwave> pendingWaves = [];
+        // 2026-10-14: warheads that went off since the last Update (DiscoveryPatches.Detonated)
+        private readonly List<ACMIDetonation_mono.Pending> pendingDetonations = [];
         private BulletSim[] bulletSims = [];
         private bool processUnits = false;
         private bool processBulletSims = false;
@@ -231,6 +233,18 @@ namespace NOBlackBox
                 // a unit the discovery skipped while it was disabled is a candidate again, as the scene search found it
                 pendingUnits.Add(unit);
             }
+        }
+
+        internal void NoteDetonation(Missile missile, bool armed)
+        {
+            if (!enabled || missile == null)
+            {
+                return;
+            }
+            Vector3 pos = missile.transform.position;
+            string name = missile.definition != null ? missile.definition.unitName : "Warhead";
+            pendingDetonations.Add(new ACMIDetonation_mono.Pending(pos.GlobalX(), pos.GlobalY(), pos.GlobalZ(), name,
+                ACMIDetonation_mono.RadiusFor(missile.GetYield()), armed));
         }
 
         internal void NoteWave(Shockwave wave)
@@ -442,6 +456,15 @@ namespace NOBlackBox
                 }
                 processBulletSims = false;
             }
+
+            for (int i = 0; i < pendingDetonations.Count; i++)
+            {
+                GameObject go = new GameObject();
+                ACMIDetonation_mono det = Track(go.AddComponent<ACMIDetonation_mono>());
+                det.Init(pendingDetonations[i]);
+                det.enabled = true;
+            }
+            pendingDetonations.Clear();
 
             if (UseWaveHook)
             {
@@ -760,6 +783,7 @@ namespace NOBlackBox
             lateQueue.Clear();
             pendingUnits.Clear();
             pendingWaves.Clear();
+            pendingDetonations.Clear();
             writer?.Close();
             Plugin.Logger?.LogDebug("DESTROYED MONO RECORDER");
         }

@@ -45,12 +45,9 @@ namespace NOBlackBox
             {
                 info = Plugin.NOBlackBoxUnitInfo["ships"][ship.definition.unitName];
             }
-            int range1 = 0;
-            int range2 = 0;
-            int winningRange = 0;
-            int.TryParse(info[2], out range1);
-            int.TryParse(info[3], out range2);
-            if (range1 > range2) { winningRange = range1; } else { winningRange = range2; }
+            // Tomo's Nukes 2026-10-20: the larger of its radar and sight ranges, read from the unit's own detectors; the
+            // table is only the fallback (ACMIUnit_mono.EngagementRangeOf)
+            int winningRange = EngagementRangeOf(base.unit, info);
 
             props = new PropBag()
             {

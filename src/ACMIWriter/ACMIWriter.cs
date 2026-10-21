@@ -228,7 +228,16 @@ namespace NOBlackBox
         // after every recording on the live servers (10-08 to 10-12), and in the worst timing the zip written twice.
         private int closed = 0;
 
-        internal async void Close()
+        // Tomo's Nukes 2026-10-21 (Tomo: "make sure that the zips don't break"): the zip ran in the background
+        // ("async void") and nothing waited for it, so a game stopped mid-mission exited about 1.5 s later with the zip
+        // cut short (the 10-20 05:40 PvE restart left a 495 MB recording's zip at 21.7 MB, its raw file complete).
+        // While the game is quitting (Quitting, set from Application.quitting) the recording is now zipped on the spot,
+        // before the game exits. Otherwise it is zipped on a worker thread as before, and a quitting game first waits
+        // for any of those still running (WaitForZips).
+        internal static volatile bool Quitting = false;
+        private static readonly List<System.Threading.Tasks.Task> zips = new();
+
+        internal void Close()
         {
             if (System.Threading.Interlocked.Exchange(ref closed, 1) != 0)
             {
@@ -237,15 +246,61 @@ namespace NOBlackBox
             try
             {
                 output.Close();
-                string zipPath = await ZipHelper.ZipFileAsync(filename);
-                Plugin.Logger?.LogDebug($"saving compressed acmi {zipPath}");
-                await ZipHelper.DeleteFileAsync(filename);
-                Plugin.Logger?.LogDebug($"deleted uncompressed acmi {filename}");
             }
             catch (Exception e)
             {
                 UnityEngine.Debug.LogWarning($"[NOBlackBox] closing the recording {Path.GetFileName(filename)}: {e.Message}");
+                return;
             }
+            if (Quitting)
+            {
+                ZipAndDelete(true);
+                return;
+            }
+            System.Threading.Tasks.Task zip = System.Threading.Tasks.Task.Run(() => ZipAndDelete(false));
+            lock (zips)
+            {
+                zips.RemoveAll(t => t.IsCompleted);
+                zips.Add(zip);
+            }
+        }
+
+        private void ZipAndDelete(bool atQuit)
+        {
+            try
+            {
+                Stopwatch took = Stopwatch.StartNew();
+                long size = new FileInfo(filename).Length;
+                string zipPath = ZipHelper.ZipFile(filename);
+                Plugin.Logger?.LogDebug($"saving compressed acmi {zipPath}");
+                ZipHelper.DeleteFile(filename);
+                Plugin.Logger?.LogDebug($"deleted uncompressed acmi {filename}");
+                if (atQuit)
+                {
+                    UnityEngine.Debug.Log($"[NOBlackBox] game quitting: {Path.GetFileName(zipPath)} zipped ({size / 1048576.0:0.0} MB) in {took.Elapsed.TotalSeconds:0.0} s");
+                }
+            }
+            catch (Exception e)
+            {
+                UnityEngine.Debug.LogWarning($"[NOBlackBox] zipping the recording {Path.GetFileName(filename)}: {e.Message}");
+            }
+        }
+
+        // the game is quitting: let any zip still running on a worker thread finish before it exits
+        internal static void WaitForZips(int milliseconds)
+        {
+            System.Threading.Tasks.Task[] running;
+            lock (zips)
+            {
+                running = zips.Where(t => !t.IsCompleted).ToArray();
+            }
+            if (running.Length == 0)
+            {
+                return;
+            }
+            Stopwatch took = Stopwatch.StartNew();
+            bool done = System.Threading.Tasks.Task.WaitAll(running, milliseconds);
+            UnityEngine.Debug.Log($"[NOBlackBox] game quitting: waited {took.Elapsed.TotalSeconds:0.0} s for {running.Length} zip(s) still running{(done ? "" : ", not finished")}");
         }
     }
 }

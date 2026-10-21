@@ -29,7 +29,7 @@ namespace NOBlackBox
         */
 
         private bool lastGear = false;
-        private bool lastRadar = false;
+        private int lastRadarMode = -1;   // -1 = not written yet
         private float lastAGL = float.NaN;
         private float lastTAS = float.NaN;
         private float lastAOA = float.NaN;
@@ -147,34 +147,47 @@ namespace NOBlackBox
             props.Clear();
         }
 
+        // Tomo's Nukes 2026-10-20: the pilot's selected weapon targets are written whenever the list changes, a single
+        // target included, and a slot no longer in use is written blank, so an emptied or shorter list is cleared. The
+        // old code wrote the list only with 2 or more targets (AI lists hold 0 or 1, so AI targets never showed), never
+        // cleared it, and wrote it again every update because it compared two new arrays.
+        private const int TargetSlots = 10;
+        private readonly long[] writtenTargets = new long[TargetSlots];
+        private readonly long[] seenTargets = new long[TargetSlots];
+        private int writtenTargetCount = 0;
+
         internal override void UpdateTargets()
         {
-            targets = aircraft.weaponManager.GetTargetList().ToArray();
-            if (targets.Length > 0 && targets != lastTargets)
+            List<Unit>? list = aircraft.weaponManager?.GetTargetList();
+            int count = 0;
+            if (list != null)
             {
-                lastTargets = targets;
-                int max = targets.Length;
-                if (max > 10)
+                for (int i = 0; i < list.Count && count < TargetSlots; i++)
                 {
-                    max = 10;
-                }
-                if (targets.Length > 1)
-                {
-
-                    for (int i = 0; i < max; i++)
+                    Unit target = list[i];
+                    if (!ReferenceEquals(target, null))
                     {
-                        if (i == 0)
-                        {
-                            lockedTargetString = "LockedTarget";
-                        }
-                        else
-                        {
-                            lockedTargetString = $"LockedTarget{i:X}";
-                        }
-                        props.Add(lockedTargetString, $"{GetTacviewIdOfUnit(targets[i].persistentID.Id):X}");
+                        seenTargets[count++] = target.persistentID.Id;
                     }
                 }
             }
+            bool changed = count != writtenTargetCount;
+            for (int i = 0; i < count && !changed; i++)
+            {
+                changed = seenTargets[i] != writtenTargets[i];
+            }
+            if (!changed)
+            {
+                return;
+            }
+            int slots = Math.Max(count, writtenTargetCount);
+            for (int i = 0; i < slots; i++)
+            {
+                lockedTargetString = i == 0 ? "LockedTarget" : $"LockedTarget{i:X}";
+                props.Add(lockedTargetString, i < count ? $"{GetTacviewIdOfUnit(seenTargets[i]):X}" : "");
+            }
+            Array.Copy(seenTargets, writtenTargets, count);
+            writtenTargetCount = count;
         }
 
         void UpdateAircraft()
@@ -208,10 +221,21 @@ namespace NOBlackBox
                 lastGear = aircraft.gearDeployed;
             }
 
-            if (aircraft.radar != lastRadar && Configuration.RecordRadarMode.Value == true)
+            // Tomo's Nukes 2026-10-20: RadarMode follows the radar being switched on and off (radar.activated, which the
+            // player's toggle sets on the server too). The old check compared the radar object with a bool, so it was
+            // written once when the radar first existed and never again.
+            if (Configuration.RecordRadarMode.Value == true)
             {
-                props.Add("RadarMode", aircraft.radar.activated ? "1" : "0");
-                lastRadar = aircraft.radar;
+                TargetDetector? radar = aircraft.radar;
+                if (radar != null || lastRadarMode != -1)
+                {
+                    int mode = radar != null && radar.activated ? 1 : 0;
+                    if (mode != lastRadarMode)
+                    {
+                        props.Add("RadarMode", mode == 1 ? "1" : "0");
+                        lastRadarMode = mode;
+                    }
+                }
             }
 
             if (localAircraft && localAircraft.persistentID == aircraft.persistentID && CameraStateManager.cameraMode == CameraMode.cockpit && Configuration.RecordPilotHead.Value == true)

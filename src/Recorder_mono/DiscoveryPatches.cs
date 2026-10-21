@@ -18,6 +18,8 @@ namespace NOBlackBox
         internal static bool unitsApplied = false;
         internal static bool disabledApplied = false;
         internal static bool wavesApplied = false;
+        internal static bool detonationsApplied = false;   // 2026-10-14: every warhead going off (ACMIDetonation_mono)
+        private static bool detonationFailed = false;
         internal static bool failed = false;
         private static ManualLogSource? log;
 
@@ -31,6 +33,19 @@ namespace NOBlackBox
             disabledApplied = TryPatch(harmony, AccessTools.PropertySetter(typeof(Unit), nameof(Unit.Networkdisabled)),
                 nameof(DisabledSet), "unit disabled flag", finalizer: true);
             wavesApplied = TryPatch(harmony, AccessTools.Method(typeof(Shockwave), "Start"), nameof(WaveStarted), "shockwave start");
+            // 2026-10-14: Missile.Detonate sends RpcDetonate, whose body (UserCode_RpcDetonate_<hash>) runs on the server
+            // too and moves the missile to the blast point first. Found by its name prefix, so a game update that changes
+            // the hash still finds it. Missile is not a generic type.
+            MethodInfo? detonate = null;
+            foreach (MethodInfo m in AccessTools.GetDeclaredMethods(typeof(Missile)))
+            {
+                if (m.Name.StartsWith("UserCode_RpcDetonate", StringComparison.Ordinal))
+                {
+                    detonate = m;
+                    break;
+                }
+            }
+            detonationsApplied = TryPatch(harmony, detonate, nameof(Detonated), "missile detonation");
         }
 
         private static bool TryPatch(Harmony harmony, MethodBase? target, string method, string what, bool finalizer = false)
@@ -95,6 +110,24 @@ namespace NOBlackBox
             catch (Exception e)
             {
                 Fail(e);
+            }
+        }
+
+        // its own failure flag: a problem here only stops the detonation records, never the discovery hooks
+        private static void Detonated(Missile __instance, bool armed)
+        {
+            if (detonationFailed)
+            {
+                return;
+            }
+            try
+            {
+                Recorder_mono.Current?.NoteDetonation(__instance, armed);
+            }
+            catch (Exception e)
+            {
+                detonationFailed = true;
+                log?.LogWarning($"Recorder detonation hook failed (logged once), detonations are no longer recorded: {e}");
             }
         }
 

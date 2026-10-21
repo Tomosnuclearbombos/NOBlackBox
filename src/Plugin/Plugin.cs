@@ -56,6 +56,17 @@ namespace NOBlackBox
         {
             //Logger = base.Logger;
         }
+        private static void OnGameQuitting()
+        {
+            ACMIWriter.Quitting = true;
+            ACMIWriter.WaitForZips(20000);
+        }
+
+        private void OnApplicationQuit()
+        {
+            OnGameQuitting();
+        }
+
         private void Awake()
         {
             GameObject managerObject = Chainloader.ManagerObject;
@@ -72,6 +83,13 @@ namespace NOBlackBox
                 Logger = base.Logger;
             }
 
+            // 2026-10-21: unfinished zips left by a game that stopped while zipping (ZipHelper writes <name>.zip.acmi.part)
+            int staleParts = ZipHelper.DeleteStaleParts(Configuration.OutputPath);
+            if (staleParts > 0)
+            {
+                base.Logger.LogInfo($"Removed {staleParts} unfinished zip(s) (.zip.acmi.part) from {Configuration.OutputPath}");
+            }
+
             foreach (string key in NOBlackBoxUnitInfo.Keys)
             {
                 LoadPluginUnitInfo(key);
@@ -86,6 +104,9 @@ namespace NOBlackBox
 
             OnGameStateChange += ResetRecordingManually;
             GameManager.OnGameStateChanged.AddListener(OnGameStateChange);
+
+            // 2026-10-21: a quitting game zips its recording on the spot, before it exits (ACMIWriter.Quitting)
+            Application.quitting += OnGameQuitting;
 
             try
             {
