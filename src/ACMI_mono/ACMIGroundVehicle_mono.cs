@@ -10,6 +10,7 @@ namespace NOBlackBox
 {
     internal class ACMIGroundVehicle_mono : ACMIUnit_mono
     {
+        private DetectionState? detection;   // 2026-10-25: RadarDetects, TrackedBy; 10-26 SightDetects
         /*
         private readonly static Dictionary<string, string> TYPES = new()
         {
@@ -121,6 +122,7 @@ namespace NOBlackBox
                 { "EngagementRange", winningRange.ToString(CultureInfo.InvariantCulture) },
                 { "Debug", lastState.ToString()}
             };
+            detection = new DetectionState(vehicle, tracked: true);
             Recorder_mono.Current!.invokeWriterUpdate(this);
             props.Clear();
             this.enabled = true;
@@ -138,6 +140,7 @@ namespace NOBlackBox
             UpdatePose();
             UpdateTargets();
             UpdateState();
+            detection?.Write(this, unit, props);
             Recorder_mono.Current!.invokeWriterUpdate(this);
             props.Clear();
         }

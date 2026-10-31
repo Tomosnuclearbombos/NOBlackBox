@@ -120,6 +120,7 @@ namespace NOBlackBox
             }
             // 2026-10-12: new units, disabled flags and shockwaves from the game instead of scene searches
             DiscoveryPatches.Apply(new Harmony("xyz.KopterBuzz.NOBlackBox.discovery"), base.Logger);
+            DetectionFeed.Apply(new Harmony("xyz.KopterBuzz.NOBlackBox.detections"), base.Logger);   // 2026-10-25
 
         }
         private void Update()

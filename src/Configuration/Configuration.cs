@@ -36,6 +36,7 @@ namespace NOBlackBox
         internal const bool DefaultRecordAOA = true;
         internal const bool DefaultRecordAGL = true;
         internal const bool DefaultRecordRadarMode = true;
+        internal const bool DefaultRecordDetections = true;   // 2026-10-25: RadarDetects, PassiveTracks, TrackedBy; 10-26 SightDetects; 10-27 RadarLockedBy
         internal const bool DefaultRecordLandingGear = true;
         internal const bool DefaultRecordPilotHead = true;
         internal const bool DefaultCompressIDs = false;
@@ -101,6 +102,7 @@ namespace NOBlackBox
         internal static ConfigEntry<bool> RecordAOA;
         internal static ConfigEntry<bool> RecordAGL;
         internal static ConfigEntry<bool> RecordRadarMode;
+        internal static ConfigEntry<bool> RecordDetections;
         internal static ConfigEntry<bool> RecordLandingGear;
         internal static ConfigEntry<bool> RecordPilotHead;
         internal static ConfigEntry<bool> RecordExtraTelemetry;
@@ -289,6 +291,9 @@ namespace NOBlackBox
 
             RecordRadarMode = config.Bind(OptionalDataSettings, "RecordRadarMode", DefaultRecordRadarMode, "Toggle recording radar mode changes. Default: true");
             Plugin.Logger?.LogDebug($"RecordRadarMode = {RecordRadarMode?.Value}");
+
+            RecordDetections = config.Bind(OptionalDataSettings, "RecordDetections", DefaultRecordDetections, "Toggle recording what each radar detects (RadarDetects), what each unit sees by eye (SightDetects), what each passive receiver hears (PassiveTracks), which other sides' data link has each unit (TrackedBy) and which radars give each aircraft a red warning (RadarLockedBy). Default: true");
+            Plugin.Logger?.LogDebug($"RecordDetections = {RecordDetections?.Value}");
 
             RecordLandingGear = config.Bind(OptionalDataSettings, "RecordLandingGear", DefaultRecordLandingGear, "Toggle recording landing gear changes. Default: true");
             Plugin.Logger?.LogDebug($"RecordLandingGear = {RecordLandingGear?.Value}");

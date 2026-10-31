@@ -41,6 +41,7 @@ namespace NOBlackBox
         private Vector3 lastHead = Vector3.zero;
 
         Aircraft aircraft;
+        private DetectionState? detection;   // 2026-10-25: RadarDetects, PassiveTracks, TrackedBy; 10-26 SightDetects; 10-27 RadarLockedBy
         Aircraft localAircraft = null;
 
         // Tomo's Nukes pilot-name fix (2026-10-04). Since game 0.34 GetPlayerName() returns a PlayerName object, so the
@@ -94,6 +95,7 @@ namespace NOBlackBox
                     props.Add("Registration", aircraft.Player.SteamID.ToString());
                 }
             }
+            detection = new DetectionState(aircraft, tracked: true);
             Recorder_mono.Current!.invokeWriterUpdate(this);
             props.Clear();
             this.enabled = true;
@@ -143,6 +145,7 @@ namespace NOBlackBox
 #if RECPROF
             if (RecProf.On) RecProf.Add(RecProf.A_TARGETS, t0);
 #endif
+            detection?.Write(this, aircraft, props);
             Recorder_mono.Current!.invokeWriterUpdate(this);
             props.Clear();
         }

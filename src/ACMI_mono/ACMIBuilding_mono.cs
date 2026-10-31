@@ -11,6 +11,7 @@ namespace NOBlackBox
     {
         public Building building;
         private string coalition;
+        private DetectionState? detection;   // 2026-10-26: RadarDetects, SightDetects (only a building with a detector)
         public virtual void Init(Building building)
         {
             base.unit = building;
@@ -31,6 +32,8 @@ namespace NOBlackBox
             };
             UpdatePose();
             UpdateState();
+            DetectionState d = new DetectionState(building, tracked: false);
+            detection = d.HasDetectors ? d : null;
             Recorder_mono.Current!.invokeWriterUpdate(this);
             props.Clear();
             this.enabled = true;
@@ -68,6 +71,13 @@ namespace NOBlackBox
                 props.Add("Debug", $"{building.unitState.ToString()}");
                 Recorder_mono.Current!.invokeWriterUpdate(this);
 
+            }
+            if (detection != null && !building.disabled && !base.disabled)
+            {
+                props.Clear();
+                detection.Write(this, unit, props);
+                Recorder_mono.Current!.invokeWriterUpdate(this);   // writes nothing when nothing changed
+                props.Clear();
             }
             if (unit.disabled && !base.disabled)
             {

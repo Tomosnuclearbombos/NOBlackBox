@@ -29,6 +29,7 @@ namespace NOBlackBox
         */
         private Unit?[] lastTarget;
         private Ship ship;
+        private DetectionState? detection;   // 2026-10-25: RadarDetects, TrackedBy; 10-26 SightDetects
 
         public virtual void Init(Ship ship)
         {
@@ -59,6 +60,7 @@ namespace NOBlackBox
                 { "EngagementRange", winningRange.ToString(CultureInfo.InvariantCulture) },
                 { "Debug", lastState.ToString()}
             };
+            detection = new DetectionState(ship, tracked: true);
             Recorder_mono.Current!.invokeWriterUpdate(this);
             props.Clear();
             this.enabled = true;
@@ -77,6 +79,7 @@ namespace NOBlackBox
             UpdatePose();
             UpdateTargets();
             UpdateState();
+            detection?.Write(this, ship, props);
             Recorder_mono.Current!.invokeWriterUpdate(this);
             props.Clear();
         }
