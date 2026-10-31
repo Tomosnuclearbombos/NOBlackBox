@@ -5,7 +5,7 @@ Mission Recorder for [Nuclear Option](https://store.steampowered.com/app/2168680
 ## About this fork
 
 This is my fork of [KopterBuzz/NOBlackBox](https://github.com/KopterBuzz/NOBlackBox), made with
-KopterBuzz's OK. It's the build my two Nuclear Option servers run, and it's the optional recorder for
+KopterBuzz's OK. It's the build my Nuclear Option servers run, and it's the optional recorder for
 the live map in the [Nuclear Option Toolkit](https://github.com/Tomosnuclearbombos/nuclear-option-toolkit).
 The recorder is KopterBuzz's and the contributors' work, listed at the bottom of this page, and these
 are my changes on top of 0.3.8.5:
@@ -52,6 +52,12 @@ are my changes on top of 0.3.8.5:
   the background and the game exited before it was done. The zip is now written as `.zip.acmi.part` and
   renamed once it's complete, a game that shuts down normally finishes the zip before it exits, and
   leftover `.part` files are cleared when the recorder loads.
+* **Detections (build 5).** Five new properties show who sees whom. RadarDetects lists what each radar picked
+  up on its last sweep, and SightDetects what each unit's eyes saw, leaving out anything its radar already
+  has. PassiveTracks lists the radars a plane's warning receiver heard in the last 4 seconds, TrackedBy the
+  other sides whose data link has the unit, and RadarLockedBy the radars giving a plane a red warning,
+  counting a jet whose radar has it and whose weapons are aimed at it. Each is written only when it changes,
+  and `RecordDetections = false` turns them all off.
 
 The plugin GUID, version and config file are the same as the official build, so it drops in over it.
 The download on the [releases page](https://github.com/Tomosnuclearbombos/NOBlackBox/releases) is the
